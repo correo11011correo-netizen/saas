@@ -264,15 +264,11 @@ class BotEngine:
             )
 
             if products:
-                response_msg = "📦 *Productos encontrados:*
-
-"
+                response_msg = "📦 *Productos encontrados:*\\n\\n"
                 for p in products:
                     status = "✅ En Stock" if p['quantity'] > 0 else "❌ Agotado"
-                    response_msg += f"• {p['name']} - ${p['price']} ({status})
-"
-                response_msg += "
-Para volver al menú, escribe 'Menú'."
+                    response_msg += f"• {p['name']} - ${p['price']} ({status})\\n"
+                response_msg += "\\nPara volver al menú, escribe 'Menú'."
             else:
                 response_msg = f"No encontré productos que coincidan con '{text_message}'. Intenta con otra palabra. 🔍"
 
