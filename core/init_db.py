@@ -172,6 +172,7 @@ def init_db():
                 ],
                 "whatsapp_sessions": [
                     "phone_number VARCHAR(50)",
+                    "account_alias VARCHAR(100)",
                     "is_bot_active BOOLEAN DEFAULT TRUE",
                     "current_node_id UUID",
                     "last_interaction TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP",

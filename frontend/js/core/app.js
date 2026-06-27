@@ -32,37 +32,37 @@ const App = {
         UI.toast('Cargando Hub Central...', 'info');
 
         const html = `
-            <div class="app-container" style="display: flex; flex-direction: column; height: 100vh; padding-bottom: 80px;">
-                <header style="padding: var(--spacing-lg); background: var(--color-surface); border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center;">
+            <div class="app-container">
+                <header class="app-header">
                     <div>
                         <h2 style="font-size: 20px;">OmniHub</h2>
                         <p class="text-muted" style="font-size: 12px;">Bienvenido, ${Session.getUser()?.business_name || 'Usuario'}</p>
                     </div>
-                    <button id="logout-btn" class="btn" style="padding: 8px 12px; font-size: 12px; background: var(--color-border); color: var(--color-text-main);">Salir</button>
+                    <button id="logout-btn" class="btn btn-outline">Salir</button>
                 </header>
 
-                <main id="app-content" style="flex: 1; padding: var(--spacing-lg); overflow-y: auto;">
-                    <div class="modules-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md);">
-                        <div class="module-card" onclick="App.loadModule('sales')" style="background: white; padding: var(--spacing-md); border-radius: var(--radius-md); text-align: center; cursor: pointer; border: 1px solid var(--color-border); box-shadow: var(--shadow-sm);">
-                            <div style="margin-bottom: 8px; color: var(--color-primary);">${Icons.sales}</div>
-                            <div style="font-weight: 600;">Ventas</div>
+                <main id="app-content" class="app-main">
+                    <div class="modules-grid">
+                        <div class="module-card" onclick="App.loadModule('sales')">
+                            <div class="module-card-icon">${Icons.sales}</div>
+                            <div class="module-card-label">Ventas</div>
                         </div>
-                        <div class="module-card" onclick="App.loadModule('stock')" style="background: white; padding: var(--spacing-md); border-radius: var(--radius-md); text-align: center; cursor: pointer; border: 1px solid var(--color-border); box-shadow: var(--shadow-sm);">
-                            <div style="margin-bottom: 8px; color: var(--color-primary);">${Icons.box}</div>
-                            <div style="font-weight: 600;">Stock</div>
+                        <div class="module-card" onclick="App.loadModule('stock')">
+                            <div class="module-card-icon">${Icons.box}</div>
+                            <div class="module-card-label">Stock</div>
                         </div>
-                        <div class="module-card" onclick="App.loadModule('whatsapp')" style="background: white; padding: var(--spacing-md); border-radius: var(--radius-md); text-align: center; cursor: pointer; border: 1px solid var(--color-border); box-shadow: var(--shadow-sm);">
-                            <div style="margin-bottom: 8px; color: var(--color-primary);">${Icons.whatsapp}</div>
-                            <div style="font-weight: 600;">WhatsApp</div>
+                        <div class="module-card" onclick="App.loadModule('whatsapp')">
+                            <div class="module-card-icon">${Icons.whatsapp}</div>
+                            <div class="module-card-label">WhatsApp</div>
                         </div>
-                        <div class="module-card" onclick="App.loadModule('profile')" style="background: white; padding: var(--spacing-md); border-radius: var(--radius-md); text-align: center; cursor: pointer; border: 1px solid var(--color-border); box-shadow: var(--shadow-sm);">
-                            <div style="margin-bottom: 8px; color: var(--color-primary);">${Icons.user}</div>
-                            <div style="font-weight: 600;">Perfil</div>
+                        <div class="module-card" onclick="App.loadModule('profile')">
+                            <div class="module-card-icon">${Icons.user}</div>
+                            <div class="module-card-label">Perfil</div>
                         </div>
                     </div>
                 </main>
 
-                <nav id="app-dock" style="position: fixed; bottom: 0; left: 0; right: 0; height: 70px; display: flex; justify-content: space-around; align-items: center; padding: 0 var(--spacing-md); z-index: 100;">
+                <nav id="app-dock">
                     <!-- El dock se renderiza dinámicamente via renderDock() -->
                 </nav>
 

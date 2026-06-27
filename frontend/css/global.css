@@ -53,27 +53,116 @@ body {
     min-height: 100vh;
 }
 
-/* Layout Base Vertical (Mobile-First) */
+/* Layout Base Responsivo */
 #app-root {
-    max-width: 500px;
+    width: 100%;
+    max-width: 1200px;
     margin: 0 auto;
     min-height: 100vh;
     position: relative;
     display: flex;
     flex-direction: column;
     background-color: var(--color-bg);
-    transition: max-width 0.3s ease;
+    transition: all 0.3s ease;
 }
 
-@media (min-width: 768px) {
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding-bottom: 80px;
+}
+
+.app-header {
+    padding: var(--spacing-lg);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    backdrop-filter: blur(10px);
+}
+
+.app-main {
+    flex: 1;
+    padding: var(--spacing-lg);
+    overflow-y: auto;
+}
+
+.modules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-md);
+}
+
+.module-card {
+    background: white;
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    text-align: center;
+    cursor: pointer;
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-sm);
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.module-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--color-primary);
+}
+
+.module-card-icon {
+    margin-bottom: 8px;
+    color: var(--color-primary);
+}
+
+.module-card-label {
+    font-weight: 600;
+}
+
+/* Dock Responsivo */
+#app-dock {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 70px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0 var(--spacing-md);
+    z-index: 100;
+    background: rgba(255, 255, 255, 0.4) !important;
+    backdrop-filter: blur(15px) saturate(180%);
+    -webkit-backdrop-filter: blur(15px) saturate(180%);
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    transition: all 0.3s ease;
+}
+
+@media (min-width: 1024px) {
+    #app-dock {
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: auto;
+        min-width: 400px;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--color-border);
+        box-shadow: var(--shadow-md);
+        padding: 0 var(--spacing-lg);
+        border-top: none;
+    }
+    
     #app-root {
-        /* On desktop, we keep the mobile look centered,
-           but we can allow it to grow slightly or stay fixed for consistency.
-           If the user wants "integracion para pc", we can make it a
-           responsive container that centers itself but handles events better. */
         box-shadow: var(--shadow-md);
         border-left: 1px solid var(--color-border);
         border-right: 1px solid var(--color-border);
+        background: white;
     }
 }
 
@@ -103,6 +192,14 @@ h1, h2, h3 { font-weight: 700; color: var(--color-text-main); }
 .btn-primary:active {
     transform: scale(0.98);
     background-color: var(--color-primary-hover);
+}
+
+.btn-outline {
+    padding: 8px 12px;
+    font-size: 12px;
+    background: var(--color-border);
+    color: var(--color-text-main);
+    border-radius: var(--radius-sm);
 }
 
 .input-field {
@@ -176,14 +273,6 @@ h1, h2, h3 { font-weight: 700; color: var(--color-text-main); }
 @keyframes slideIn {
     from { transform: translateY(-20px); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
-}
-
-/* Glassmorphism Dock */
-#app-dock {
-    background: rgba(255, 255, 255, 0.4) !important;
-    backdrop-filter: blur(15px) saturate(180%);
-    -webkit-backdrop-filter: blur(15px) saturate(180%);
-    border-top: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 /* Menu Panel (Bottom Sheet Style) */
