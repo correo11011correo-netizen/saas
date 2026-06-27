@@ -254,6 +254,21 @@ def init_db():
                 )
 
             # 4. Handle Specific Table Constraints
+            logger.info("Ensuring specific business constraints...")
+
+            # Constraint for whatsapp_sessions: Unique tenant + phone
+            run_query(
+                cur,
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'unique_whatsapp_session_per_tenant') THEN
+                        ALTER TABLE whatsapp_sessions ADD CONSTRAINT unique_whatsapp_session_per_tenant UNIQUE (tenant_id, phone_number);
+                    END IF;
+                END $$;
+                """,
+            )
+
             # Uniqueness for products
             run_query(
                 cur,
@@ -264,9 +279,8 @@ def init_db():
                         ALTER TABLE products ADD CONSTRAINT unique_product_per_tenant UNIQUE (code, tenant_id);
                     END IF;
                 END $$;
-            """,
+                """,
             )
-
             # Uniqueness for credentials
             run_query(
                 cur,
