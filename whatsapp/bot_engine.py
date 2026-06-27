@@ -74,22 +74,23 @@ class BotEngine:
                               current_node_id = CASE WHEN :first THEN NULL ELSE whatsapp_sessions.current_node_id END,
                               account_alias = EXCLUDED.account_alias -- Asegurar que el alias siempre esté actualizado
                 """
-            ),
-            {"tid": tenant_id, "phone": sender, "alias": account_alias, "first": is_first_message},
-        )
-        session.commit()
-        
-        session_data = (
-            session.execute(
+                ),
+                {"tid": tenant_id, "phone": sender, "alias": account_alias, "first": is_first_message},
+                )
+                session.commit()
+
+                session_data = (
+                session.execute(
                 text(
                     "SELECT current_node_id, account_alias, is_bot_active FROM whatsapp_sessions "
                     "WHERE phone_number = :phone AND tenant_id = :tid AND account_alias = :alias"
                 ),
                 {"phone": sender, "tid": tenant_id, "alias": account_alias},
-            )
-            .mappings()
-            .first()
-        )
+                )
+                .mappings()
+                .first()
+                )
+
 
         if not session_data:
             logger.error(f"No se pudo recuperar la sesión para {sender} con alias {account_alias}")
