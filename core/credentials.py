@@ -132,6 +132,9 @@ class CredentialsCommandHandler:
         metadata: str = None,
     ) -> ServiceResponse:
         try:
+            logger.info(f"Intentando establecer credencial para tenant {context.tenant_id}, servicio {service}, alias {account_alias}")
+            logger.info(f"API Key (parcial): {api_key[:5]}..., Secret: {secret}, Metadata: {metadata}")
+
             # Upsert credential for this tenant and account alias
             session.execute(
                 text(
@@ -154,6 +157,7 @@ class CredentialsCommandHandler:
 
             # --- AUTO-CONFIGURACIÓN DE BOT DE WHATSAPP ---
             if service == 'whatsapp':
+                logger.info(f"Configurando bot de WhatsApp automáticamente para alias {account_alias}")
                 # 1. Asegurar configuración básica del Bot
                 session.execute(
                     text(
@@ -181,11 +185,13 @@ class CredentialsCommandHandler:
                 )
 
             session.commit()
+            logger.info(f"Credenciales y bot (si aplica) configurados exitosamente para {service} ({account_alias}).")
             return ServiceResponse.success_res(
                 message=f"Credentials for {service} ({account_alias}) updated successfully and bot configured."
             )
         except Exception as e:
             session.rollback()
+            logger.error(f"Error al establecer credencial para {service} ({account_alias}): {str(e)}", exc_info=True)
             return ServiceResponse.error_res(
                 f"Error setting credential: {str(e)}", "CRED_SET_ERROR"
             )
