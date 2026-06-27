@@ -73,7 +73,6 @@ class BotEngine:
                 DO UPDATE SET is_bot_active = CASE WHEN :first THEN TRUE ELSE whatsapp_sessions.is_bot_active END,
                               current_node_id = CASE WHEN :first THEN NULL ELSE whatsapp_sessions.current_node_id END,
                               account_alias = EXCLUDED.account_alias -- Asegurar que el alias siempre esté actualizado
-                """
         session.execute(
             text(
                 """
