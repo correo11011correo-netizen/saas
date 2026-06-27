@@ -24,18 +24,25 @@ window.Sales = {
 
     async renderPOS() {
         return `
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: var(--spacing-md); padding: var(--spacing-md);">
-                <div>
+            <div class="pos-layout" style="display: flex; flex-direction: column; gap: var(--spacing-md);">
+                <div class="products-section">
                     <h3>Productos</h3>
-                    <div id="products-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--spacing-sm);">Cargando...</div>
+                    <div id="products-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--spacing-sm);">Cargando...</div>
                 </div>
-                <div style="background: white; padding: var(--spacing-md); border-radius: var(--radius-md); border: 1px solid var(--color-border);">
+                <div class="cart-section" style="background: white; padding: var(--spacing-md); border-radius: var(--radius-md); border: 1px solid var(--color-border);">
                     <h3>Carrito</h3>
-                    <div id="cart-list">Vacio</div>
-                    <div id="cart-total" style="font-weight: 700; margin-top: var(--spacing-md);">Total: $0</div>
+                    <div id="cart-list" style="max-height: 200px; overflow-y: auto;">Vacio</div>
+                    <div id="cart-total" style="font-weight: 700; margin-top: var(--spacing-md); font-size: 1.2em;">Total: $0</div>
                     <button class="btn btn-primary" style="width: 100%; margin-top: var(--spacing-md);" onclick="Sales.checkout()">Generar Cobro</button>
                 </div>
             </div>
+            <style>
+                @media (min-width: 768px) {
+                    .pos-layout { flex-direction: row !important; }
+                    .products-section { flex: 2; }
+                    .cart-section { flex: 1; height: fit-content; position: sticky; top: 10px; }
+                }
+            </style>
         `;
     },
 

@@ -318,9 +318,33 @@ input:checked + .slider:before { transform: translateX(20px); }
     margin-top: auto;
 }
 
+/* Fluid Module Layout */
+.module-panel {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: var(--spacing-md);
+}
+
+@media (min-width: 768px) {
+    .module-panel {
+        padding: var(--spacing-lg);
+    }
+    
+    .input-field {
+        max-width: 600px;
+    }
+    
+    .btn {
+        width: auto;
+        min-width: 150px;
+    }
+}
+
 /* Menu Panel (Bottom Sheet Style) */
 .menu-panel {
-    display: none; /* Asegurar que no ocupe espacio */
+    display: none;
     position: fixed;
     bottom: 70px;
     left: 0;
@@ -336,7 +360,7 @@ input:checked + .slider:before { transform: translateX(20px); }
     overflow-y: auto;
 }
 .menu-panel.open {
-    display: flex; /* Mostrar solo cuando tiene la clase open */
+    display: flex;
 }
 
 .menu-item {
