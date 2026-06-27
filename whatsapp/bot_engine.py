@@ -216,7 +216,7 @@ class BotEngine:
             )
 
     def _send_immediate_response(
-        self, session, tenant_id, sender, body, alias: str # Aseguramos que el alias se pase
+        self, session, tenant_id, sender, body, alias: str
     ):
         """Helper para enviar mensajes vía dispatcher rápidamente."""
         tenant_uuid = (
