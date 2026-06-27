@@ -192,22 +192,22 @@ class WhatsappCommandHandler:
     @command(
         name="bot.node.save",
         description="Saves or updates a bot node.",
-        params_model={"name": "string", "prompt": "string"},
+        params_model={"name": "string", "prompt": "string", "account_alias": "string"},
     )
     def save_node(
-        self, session: Session, context: TenantContext, name: str, prompt: str
+        self, session: Session, context: TenantContext, name: str, prompt: str, account_alias: str = "Principal"
     ) -> ServiceResponse:
         try:
             session.execute(
                 text(
                     """
-                    INSERT INTO bot_nodes (name, prompt, tenant_id)
-                    VALUES (:name, :prompt, :tid)
-                    ON CONFLICT (tenant_id, name) DO UPDATE
+                    INSERT INTO bot_nodes (name, prompt, tenant_id, account_alias)
+                    VALUES (:name, :prompt, :tid, :alias)
+                    ON CONFLICT (tenant_id, account_alias, name) DO UPDATE
                     SET prompt = EXCLUDED.prompt
                     """
                 ),
-                {"name": name, "prompt": prompt, "tid": context.tenant_id},
+                {"name": name, "prompt": prompt, "tid": context.tenant_id, "alias": account_alias},
             )
             session.commit()
             return ServiceResponse.success_res(message="Node saved successfully.")
