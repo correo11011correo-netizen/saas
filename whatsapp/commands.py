@@ -29,7 +29,7 @@ class WhatsappCommandHandler:
                     {"tid": context.tenant_id},
                 )
                 .mappings()
-                .first()
+                .all()
             )
             if not result:
                 return ServiceResponse.error_res(
@@ -37,15 +37,16 @@ class WhatsappCommandHandler:
                 )
 
             return ServiceResponse.success_res(
-                data=dict(result), message="Settings retrieved."
+                data=[dict(row) for row in result], message="Settings retrieved."
             )
         except Exception as e:
             return ServiceResponse.error_res(f"Error: {str(e)}", "GET_SETTINGS_ERROR")
 
     @command(
         name="bot.settings.update",
-        description="Updates the global bot settings.",
+        description="Updates the global bot settings for a specific profile.",
         params_model={
+            "bot_profile_id": "string",
             "bot_name": "string",
             "welcome_message": "string",
             "farewell_message": "string",
@@ -58,9 +59,12 @@ class WhatsappCommandHandler:
         self, session: Session, context: TenantContext, **params
     ) -> ServiceResponse:
         try:
-            # Only update fields that are provided
+            bot_profile_id = params.get("bot_profile_id")
+            if not bot_profile_id:
+                return ServiceResponse.error_res("bot_profile_id is required", "MISSING_ID")
+
             update_fields = []
-            values = {"tid": context.tenant_id}
+            values = {"tid": context.tenant_id, "bid": bot_profile_id}
 
             for key in [
                 "bot_name",
@@ -79,7 +83,7 @@ class WhatsappCommandHandler:
                     "No fields to update", "NO_FIELDS_ERROR"
                 )
 
-            query = f"UPDATE bot_settings SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = :tid"
+            query = f"UPDATE bot_settings SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = :tid AND bot_profile_id = :bid"
             session.execute(text(query), values)
             session.commit()
 
@@ -136,7 +140,6 @@ class WhatsappCommandHandler:
                 .mappings()
                 .all()
             )
-            # Obtenemos el estado del bot desde whatsapp_sessions (fuente de verdad actual)
             status_bot = session.execute(
                 text(
                     "SELECT is_bot_active FROM whatsapp_sessions WHERE phone_number = :phone AND tenant_id = :tid LIMIT 1"
@@ -163,7 +166,6 @@ class WhatsappCommandHandler:
         self, session: Session, context: TenantContext, phone_number: str
     ) -> ServiceResponse:
         try:
-            # 1. Clear session state first
             session.execute(
                 text(
                     "DELETE FROM whatsapp_sessions WHERE phone_number = :phone AND tenant_id = :tid"
@@ -171,7 +173,6 @@ class WhatsappCommandHandler:
                 {"phone": phone_number, "tid": context.tenant_id},
             )
 
-            # 2. Delete messages from conversations log
             session.execute(
                 text(
                     "DELETE FROM whatsapp_conversations WHERE phone_number = :phone AND tenant_id = :tid"
@@ -192,22 +193,22 @@ class WhatsappCommandHandler:
     @command(
         name="bot.node.save",
         description="Saves or updates a bot node.",
-        params_model={"name": "string", "prompt": "string", "account_alias": "string"},
+        params_model={"name": "string", "prompt": "string", "bot_profile_id": "string"},
     )
     def save_node(
-        self, session: Session, context: TenantContext, name: str, prompt: str, account_alias: str = "Principal"
+        self, session: Session, context: TenantContext, name: str, prompt: str, bot_profile_id: str
     ) -> ServiceResponse:
         try:
             session.execute(
                 text(
                     """
-                    INSERT INTO bot_nodes (name, prompt, tenant_id, account_alias)
-                    VALUES (:name, :prompt, :tid, :alias)
-                    ON CONFLICT (tenant_id, account_alias, name) DO UPDATE
+                    INSERT INTO bot_nodes (name, prompt, tenant_id, bot_profile_id)
+                    VALUES (:name, :prompt, :tid, :bid)
+                    ON CONFLICT (tenant_id, bot_profile_id, name) DO UPDATE
                     SET prompt = EXCLUDED.prompt
                     """
                 ),
-                {"name": name, "prompt": prompt, "tid": context.tenant_id, "alias": account_alias},
+                {"name": name, "prompt": prompt, "tid": context.tenant_id, "bid": bot_profile_id},
             )
             session.commit()
             return ServiceResponse.success_res(message="Node saved successfully.")
@@ -250,7 +251,7 @@ class WhatsappCommandHandler:
             result = (
                 session.execute(
                     text(
-                        "SELECT id, name, prompt FROM bot_nodes WHERE tenant_id = :tid"
+                        "SELECT id, name, prompt, bot_profile_id FROM bot_nodes WHERE tenant_id = :tid"
                     ),
                     {"tid": context.tenant_id},
                 )
@@ -271,6 +272,7 @@ class WhatsappCommandHandler:
             "label": "string",
             "next_node_id": "string",
             "action": "string",
+            "bot_profile_id": "string",
         },
     )
     def add_option(
@@ -279,6 +281,7 @@ class WhatsappCommandHandler:
         context: TenantContext,
         node_id: str,
         label: str,
+        bot_profile_id: str,
         next_node_id: str = None,
         action: str = None,
     ) -> ServiceResponse:
@@ -286,8 +289,8 @@ class WhatsappCommandHandler:
             session.execute(
                 text(
                     """
-                    INSERT INTO bot_options (node_id, label, next_node_id, action, tenant_id)
-                    VALUES (:nid, :label, :next, :action, :tid)
+                    INSERT INTO bot_options (node_id, label, next_node_id, action, tenant_id, bot_profile_id)
+                    VALUES (:nid, :label, :next, :action, :tid, :bid)
                     """
                 ),
                 {
@@ -296,6 +299,7 @@ class WhatsappCommandHandler:
                     "next": next_node_id,
                     "action": action,
                     "tid": context.tenant_id,
+                    "bid": bot_profile_id,
                 },
             )
             session.commit()
@@ -328,6 +332,7 @@ class WhatsappCommandHandler:
                 message="Options listed successfully.",
             )
         except Exception as e:
+            session.rollback()
             return ServiceResponse.error_res(f"Error: {str(e)}", "LIST_OPTIONS_ERROR")
 
     @command(
@@ -336,8 +341,8 @@ class WhatsappCommandHandler:
         params_model={
             "to": "string",
             "body": "string",
+            "bot_profile_id": "string",
             "sender_type": "string",
-            "account_alias": "string",
         },
     )
     def send_text(
@@ -346,77 +351,69 @@ class WhatsappCommandHandler:
         context: TenantContext,
         to: str,
         body: str,
-        account_alias: str = None,
+        bot_profile_id: str = None,
         sender_type: str = "bot",
     ) -> ServiceResponse:
         try:
-            # 0. Si no se proporciona alias, obtener el alias activo de la sesión
-            if not account_alias:
+            # 0. Si no se proporciona bot_profile_id, intentar obtenerlo de la sesión
+            if not bot_profile_id:
                 session_data = session.execute(
-                    text("SELECT account_alias FROM whatsapp_sessions WHERE phone_number = :phone AND tenant_id = :tid LIMIT 1"),
+                    text("SELECT bot_profile_id FROM whatsapp_sessions WHERE phone_number = :phone AND tenant_id = :tid LIMIT 1"),
                     {"phone": to, "tid": context.tenant_id}
                 ).mappings().first()
                 if session_data:
-                    account_alias = session_data['account_alias']
+                    bot_profile_id = session_data['bot_profile_id']
             
-            # Fallback a 'bot' si aun no hay alias
-            if not account_alias:
-                account_alias = 'bot'
+            if not bot_profile_id:
+                return ServiceResponse.error_res("No bot profile associated with this session/request", "BOT_PROFILE_MISSING")
 
-            logger.info(f"Intentando enviar mensaje a {to} usando alias {account_alias}")
-            # 1. Fetch credentials
-            cred = (
+            # Buscamos la credencial asociada al bot_profile_id actual para este tenant
+            # Nota: Un bot_profile_id puede estar asignado a múltiples credenciales (números).
+            # Pero para enviar un mensaje a 'to', necesitamos saber qué número (credencial) usar.
+            # El flujo lógico es: BotProfile -> BotAssignment -> Credential.
+            # Sin embargo, si queremos responder a un mensaje, deberíamos usar la credencial que recibió el mensaje.
+            # En este caso, buscaremos la credencial que está vinculada a este bot_profile_id.
+            
+            cred_info = (
                 session.execute(
                     text(
-                        "SELECT api_key, metadata FROM credentials WHERE service_name = 'whatsapp' AND account_alias = :alias AND tenant_id = :tid"
+                        """
+                        SELECT c.api_key, c.metadata 
+                        FROM credentials c
+                        JOIN bot_assignments ba ON c.id = ba.credential_id
+                        WHERE ba.bot_profile_id = :bid AND c.tenant_id = :tid
+                        LIMIT 1
+                        """
                     ),
-                    {"alias": account_alias, "tid": context.tenant_id},
+                    {"bid": bot_profile_id, "tid": context.tenant_id},
                 )
                 .mappings()
                 .first()
             )
 
-            if not cred:
-                # Intento fallback a 'bot' si el alias original falló
-                if account_alias != 'bot':
-                    logger.warning(f"No se encontraron credenciales con alias {account_alias}, intentando con 'bot'")
-                    cred = session.execute(
-                        text("SELECT api_key, metadata FROM credentials WHERE service_name = 'whatsapp' AND account_alias = 'bot' AND tenant_id = :tid"),
-                        {"tid": context.tenant_id}
-                    ).mappings().first()
-                
-                if not cred:
-                    logger.error(f"No se encontraron credenciales de WhatsApp para tenant {context.tenant_id} y alias {account_alias}")
-                    return ServiceResponse.error_res(
-                        "WhatsApp credentials not found", "WHATSAPP_CREDS_ERROR"
-                    )
-            
-            logger.info(f"Credenciales encontradas. api_key (parcial): {cred['api_key'][:5]}..., metadata: {cred['metadata']}")
+            if not cred_info:
+                logger.error(f"No credentials found for bot profile {bot_profile_id}")
+                return ServiceResponse.error_res(
+                    "WhatsApp credentials not found for this bot profile", "WHATSAPP_CREDS_ERROR"
+                )
 
             import json
-
-            # CORRECCIÓN: Verificar si metadata ya es un dict
-            if isinstance(cred["metadata"], dict):
-                meta = cred["metadata"]
+            if isinstance(cred_info["metadata"], dict):
+                meta = cred_info["metadata"]
             else:
-                meta = json.loads(cred["metadata"])
+                meta = json.loads(cred_info["metadata"])
             
             phone_number_id = meta.get("phone_number_id")
 
             if not phone_number_id:
-                logger.error(f"phone_number_id no encontrado en el metadata de las credenciales para alias {account_alias}")
                 return ServiceResponse.error_res(
-                    "Phone Number ID not found in WhatsApp credentials metadata", "WHATSAPP_PHONE_ID_ERROR"
+                    "Phone Number ID not found in credentials metadata", "WHATSAPP_PHONE_ID_ERROR"
                 )
 
-            logger.info(f"phone_number_id: {phone_number_id}")
-
-            # 2. Call Meta API
             import requests
-
             url = f"https://graph.facebook.com/v19.0/{phone_number_id}/messages"
             headers = {
-                "Authorization": f"Bearer {cred['api_key']}",
+                "Authorization": f"Bearer {cred_info['api_key']}",
                 "Content-Type": "application/json",
             }
             payload = {
@@ -436,14 +433,14 @@ class WhatsappCommandHandler:
             # 3. Log interaction
             session.execute(
                 text(
-                    "INSERT INTO whatsapp_conversations (phone_number, sender_type, message, message_type, tenant_id, account_alias) VALUES (:to, :stype, :body, 'text', :tid, :alias)"
+                    "INSERT INTO whatsapp_conversations (phone_number, sender_type, message, message_type, tenant_id, bot_profile_id) VALUES (:to, :stype, :body, 'text', :tid, :bid)"
                 ),
                 {
                     "to": to,
                     "stype": sender_type,
                     "body": body,
                     "tid": context.tenant_id,
-                    "alias": account_alias,
+                    "bid": bot_profile_id,
                 },
             )
 
@@ -456,6 +453,34 @@ class WhatsappCommandHandler:
             return ServiceResponse.error_res(
                 f"Delivery failed: {str(e)}", "DELIVERY_ERROR"
             )
+
+    @command(
+        name="whatsapp.list_credentials",
+        description="Lists all WhatsApp credentials and their current bot assignments.",
+        params_model={},
+    )
+    def list_credentials(self, session: Session, context: TenantContext) -> ServiceResponse:
+        try:
+            result = (
+                session.execute(
+                    text(
+                        """
+                        SELECT c.id as credential_id, c.account_alias, c.metadata, ba.bot_profile_id
+                        FROM credentials c
+                        LEFT JOIN bot_assignments ba ON c.id = ba.credential_id
+                        WHERE c.service_name = 'whatsapp' AND c.tenant_id = :tid
+                        """
+                    ),
+                    {"tid": context.tenant_id},
+                )
+                .mappings()
+                .all()
+            )
+            return ServiceResponse.success_res(
+                data=[dict(row) for row in result], message="Credentials listed successfully."
+            )
+        except Exception as e:
+            return ServiceResponse.error_res(f"Error listing credentials: {str(e)}", "LIST_CREDS_ERROR")
 
     @command(
         name="bot.navigate",
@@ -492,7 +517,6 @@ class WhatsappCommandHandler:
                 )
 
             import json
-
             options = result["options"]
             if isinstance(options, str):
                 options = json.loads(options)
@@ -501,7 +525,9 @@ class WhatsappCommandHandler:
                 f"{i+1}. {opt.get('label', 'Sin etiqueta')}"
                 for i, opt in enumerate(options)
             ]
-            full_text = f"{result['prompt']}\n\n{chr(10).join(options_list)}"
+            full_text = f"{result['prompt']}
+
+{chr(10).join(options_list)}"
 
             session.commit()
             return ServiceResponse.success_res(message=full_text)
@@ -517,24 +543,87 @@ class BotManagerCommandHandler:
     """
     @command(
         name="bot.create",
-        description="Creates a new specialized bot profile.",
-        params_model={"name": "string", "account_alias": "string"},
+        description="Creates a new specialized bot profile with default settings and a welcome node.",
+        params_model={"name": "string"},
     )
     def create_bot(
-        self, session: Session, context: TenantContext, name: str, account_alias: str
+        self, session: Session, context: TenantContext, name: str
+    ) -> ServiceResponse:
+        try:
+            # 1. Create the Bot Profile
+            res = session.execute(
+                text(
+                    "INSERT INTO bot_profiles (tenant_id, name) VALUES (:tid, :name) RETURNING id"
+                ),
+                {"tid": context.tenant_id, "name": name},
+            )
+            bot_id = res.scalar()
+
+            # 2. Create Default Settings for this bot
+            session.execute(
+                text(
+                    """
+                    INSERT INTO bot_settings (tenant_id, bot_profile_id, bot_name, welcome_message, farewell_message, handoff_message, support_email, is_global_active)
+                    VALUES (:tid, :bid, :name, :welcome, :farewell, :handoff, :email, TRUE)
+                    """
+                ),
+                {
+                    "tid": context.tenant_id,
+                    "bid": bot_id,
+                    "name": name,
+                    "welcome": f"¡Hola! Bienvenido a {name}. 🤖 ¿En qué puedo ayudarte hoy?",
+                    "farewell": "Gracias por contactarnos. ¡Que tengas un gran día! 👋",
+                    "handoff": "He desactivado el bot. Un agente humano se pondrá en contacto contigo en breve. 👨‍💻",
+                    "email": "soporte@negocio.com",
+                },
+            )
+
+            # 3. Create the mandatory 'inicio' node for the bot to be functional
+            session.execute(
+                text(
+                    """
+                    INSERT INTO bot_nodes (name, prompt, tenant_id, bot_profile_id)
+                    VALUES ('inicio', :prompt, :tid, :bid)
+                    """
+                ),
+                {
+                    "prompt": "Selecciona una opción del menú para comenzar. 👇",
+                    "tid": context.tenant_id,
+                    "bid": bot_id,
+                },
+            )
+
+            session.commit()
+            return ServiceResponse.success_res(message=f"Bot '{name}' created and configured successfully.")
+        except Exception as e:
+            session.rollback()
+            return ServiceResponse.error_res(f"Error creating bot: {str(e)}", "BOT_CREATE_ERROR")
+
+    @command(
+        name="bot.assign",
+        description="Assigns a credential to a bot profile.",
+        params_model={"credential_id": "string", "bot_profile_id": "string"},
+    )
+    def assign_bot(
+        self, session: Session, context: TenantContext, credential_id: str, bot_profile_id: str
     ) -> ServiceResponse:
         try:
             session.execute(
                 text(
-                    "INSERT INTO bot_profiles (tenant_id, name, account_alias) VALUES (:tid, :name, :alias)"
+                    """
+                    INSERT INTO bot_assignments (tenant_id, credential_id, bot_profile_id)
+                    VALUES (:tid, :cid, :bid)
+                    ON CONFLICT (tenant_id, credential_id) DO UPDATE
+                    SET bot_profile_id = EXCLUDED.bot_profile_id
+                    """
                 ),
-                {"tid": context.tenant_id, "name": name, "alias": account_alias},
+                {"tid": context.tenant_id, "cid": credential_id, "bid": bot_profile_id},
             )
             session.commit()
-            return ServiceResponse.success_res(message="Bot profile created successfully.")
+            return ServiceResponse.success_res(message="Bot assigned to credential successfully.")
         except Exception as e:
             session.rollback()
-            return ServiceResponse.error_res(f"Error creating bot: {str(e)}", "BOT_CREATE_ERROR")
+            return ServiceResponse.error_res(f"Error assigning bot: {str(e)}", "BOT_ASSIGN_ERROR")
 
     @command(
         name="bot.list",
@@ -544,7 +633,7 @@ class BotManagerCommandHandler:
     def list_bots(self, session: Session, context: TenantContext) -> ServiceResponse:
         try:
             result = session.execute(
-                text("SELECT id, name, account_alias, capabilities, is_active FROM bot_profiles WHERE tenant_id = :tid"),
+                text("SELECT id, name, capabilities, is_active FROM bot_profiles WHERE tenant_id = :tid"),
                 {"tid": context.tenant_id}
             ).mappings().all()
             return ServiceResponse.success_res(data=[dict(row) for row in result], message="Bot profiles listed.")
@@ -554,18 +643,18 @@ class BotManagerCommandHandler:
     @command(
         name="bot.update_capabilities",
         description="Updates bot capabilities (permissions).",
-        params_model={"account_alias": "string", "capabilities": "dict"},
+        params_model={"bot_profile_id": "string", "capabilities": "dict"},
     )
     def update_capabilities(
-        self, session: Session, context: TenantContext, account_alias: str, capabilities: Dict[str, bool]
+        self, session: Session, context: TenantContext, bot_profile_id: str, capabilities: Dict[str, bool]
     ) -> ServiceResponse:
         try:
             import json
             session.execute(
                 text(
-                    "UPDATE bot_profiles SET capabilities = :caps WHERE tenant_id = :tid AND account_alias = :alias"
+                    "UPDATE bot_profiles SET capabilities = :caps WHERE tenant_id = :tid AND id = :bid"
                 ),
-                {"caps": json.dumps(capabilities), "tid": context.tenant_id, "alias": account_alias},
+                {"caps": json.dumps(capabilities), "tid": context.tenant_id, "bid": bot_profile_id},
             )
             session.commit()
             return ServiceResponse.success_res(message="Bot capabilities updated.")

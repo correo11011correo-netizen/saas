@@ -39,7 +39,7 @@ def init_db():
                     status VARCHAR(50) DEFAULT 'active',
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
-            """,
+                """,
             )
 
             # Add webhook_secret and plan if they don't exist
@@ -55,7 +55,7 @@ def init_db():
                         ALTER TABLE tenants ADD COLUMN plan VARCHAR(50) DEFAULT 'free';
                     END IF;
                 END $$;
-            """,
+                """,
             )
 
             # 2. Create Audit Log Table
@@ -70,7 +70,7 @@ def init_db():
                     params JSONB,
                     timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
-            """,
+                """,
             )
 
             # 2.1 Create Frontend Manifest Table
@@ -86,10 +86,10 @@ def init_db():
                     active BOOLEAN DEFAULT true,
                     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
-            """,
+                """,
             )
 
-            # 2.2 Create Bot Profiles Table
+            # 2.2 Create Bot Profiles Table (The Logical Entity)
             run_query(
                 cur,
                 """
@@ -97,17 +97,30 @@ def init_db():
                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                     tenant_id UUID REFERENCES tenants(id),
                     name VARCHAR(100) NOT NULL,
-                    account_alias VARCHAR(100) NOT NULL,
                     capabilities JSONB DEFAULT '{"can_sell": false, "can_manage_stock": false, "can_process_payments": false}',
                     is_active BOOLEAN DEFAULT TRUE,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE (tenant_id, account_alias)
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
-            """,
+                """,
+            )
+
+            # 2.3 Create Bot Assignments Table (The Connection Link)
+            run_query(
+                cur,
+                """
+                CREATE TABLE IF NOT EXISTS bot_assignments (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    tenant_id UUID REFERENCES tenants(id),
+                    credential_id UUID REFERENCES credentials(id),
+                    bot_profile_id UUID REFERENCES bot_profiles(id),
+                    is_primary BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (tenant_id, credential_id)
+                );
+                """,
             )
 
             # 3. Update Users Table
-            # Create table if not exists to avoid errors during init
             run_query(
                 cur,
                 """
@@ -117,9 +130,8 @@ def init_db():
                     password_hash VARCHAR(255) NOT NULL,
                     role VARCHAR(50) DEFAULT 'employee'
                 );
-            """,
+                """,
             )
-            # Add tenant_id if it doesn't exist
             run_query(
                 cur,
                 """
@@ -130,11 +142,10 @@ def init_db():
                         CREATE INDEX idx_users_tenant ON users(tenant_id);
                     END IF;
                 END $$;
-            """,
+                """,
             )
 
             # 4. Business Tables - Multi-tenancy adaptation
-            # Mapping of tables to their required columns
             business_schemas = {
                 "sales": [
                     "cliente VARCHAR(255)",
@@ -182,14 +193,14 @@ def init_db():
                     "message TEXT",
                     "message_type VARCHAR(50)",
                     "current_node_id UUID",
-                    "account_alias VARCHAR(100)",
+                    "bot_profile_id UUID REFERENCES bot_profiles(id)",
                     "is_bot_active BOOLEAN DEFAULT TRUE",
                     "created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP",
                     "status VARCHAR(20) DEFAULT 'sent'",
                 ],
                 "whatsapp_sessions": [
                     "phone_number VARCHAR(50)",
-                    "account_alias VARCHAR(100)",
+                    "bot_profile_id UUID REFERENCES bot_profiles(id)",
                     "is_bot_active BOOLEAN DEFAULT TRUE",
                     "current_node_id UUID",
                     "last_interaction TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP",
@@ -201,12 +212,12 @@ def init_db():
                 ],
                 "bot_nodes": [
                     "name VARCHAR(100)",
-                    "account_alias VARCHAR(100)",
+                    "bot_profile_id UUID REFERENCES bot_profiles(id)",
                     "prompt TEXT",
                 ],
                 "bot_options": [
                     "node_id UUID",
-                    "account_alias VARCHAR(100)",
+                    "bot_profile_id UUID REFERENCES bot_profiles(id)",
                     "label VARCHAR(100)",
                     "next_node_id UUID",
                     "action VARCHAR(100)",
@@ -217,7 +228,7 @@ def init_db():
                     "message TEXT",
                 ],
                 "bot_settings": [
-                    "account_alias VARCHAR(100)",
+                    "bot_profile_id UUID REFERENCES bot_profiles(id)",
                     "bot_name VARCHAR(100)",
                     "welcome_message TEXT",
                     "farewell_message TEXT",
@@ -244,13 +255,11 @@ def init_db():
             }
 
             for table, columns in business_schemas.items():
-                # 1. Create table if not exists with basic ID and tenant_id
                 run_query(
                     cur,
                     f"CREATE TABLE IF NOT EXISTS {table} (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id UUID REFERENCES tenants(id));",
                 )
 
-                # 2. Add missing columns
                 for col in columns:
                     col_name = col.split(" ")[0]
                     run_query(
@@ -262,21 +271,17 @@ def init_db():
                                 ALTER TABLE {table} ADD COLUMN {col};
                             END IF;
                         END $$;
-                    """,
+                        """,
                     )
 
-                # 3. Create index on tenant_id if not exists
                 run_query(
                     cur,
                     f"""
                     CREATE INDEX IF NOT EXISTS idx_{table}_tenant ON {table}(tenant_id);
-                """,
+                    """,
                 )
 
-            # 4. Handle Specific Table Constraints
-            logger.info("Ensuring specific business constraints...")
-
-            # Constraint for whatsapp_sessions: Unique tenant + phone
+            # Constraints
             run_query(
                 cur,
                 """
@@ -289,33 +294,30 @@ def init_db():
                 """,
             )
 
-            # Uniqueness for bot_settings: Unique tenant + alias
             run_query(
                 cur,
                 """
                 DO $$
                 BEGIN
-                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'unique_bot_settings_per_alias') THEN
-                        ALTER TABLE bot_settings ADD CONSTRAINT unique_bot_settings_per_alias UNIQUE (tenant_id, account_alias);
+                    IF NOT EXISTS (SELECT 1 FROM pg_//constraint WHERE conname = 'unique_bot_settings_per_profile') THEN
+                        ALTER TABLE bot_settings ADD CONSTRAINT unique_bot_settings_per_profile UNIQUE (tenant_id, bot_profile_id);
                     END IF;
                 END $$;
                 """,
             )
 
-            # Uniqueness for bot_nodes: Unique tenant + alias + name
             run_query(
                 cur,
                 """
                 DO $$
                 BEGIN
-                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'unique_bot_node_per_alias') THEN
-                        ALTER TABLE bot_nodes ADD CONSTRAINT unique_bot_node_per_alias UNIQUE (tenant_id, account_alias, name);
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'unique_bot_node_per_profile') THEN
+                        ALTER TABLE bot_nodes ADD CONSTRAINT unique_bot_node_per_profile UNIQUE (tenant_id, bot_profile_id, name);
                     END IF;
                 END $$;
                 """,
             )
 
-            # Uniqueness for products
             run_query(
                 cur,
                 """
@@ -327,42 +329,34 @@ def init_db():
                 END $$;
                 """,
             )
-            # Uniqueness for credentials
+
             run_query(
                 cur,
                 """
                 DO $$
                 BEGIN
-                    -- Drop old constraint if exists
-                    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'unique_service_per_tenant') THEN
-                        ALTER TABLE credentials DROP CONSTRAINT unique_service_per_tenant;
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'unique_account_per_service') THEN
+                        ALTER TABLE credentials DROP CONSTRAINT unique_account_per_service;
                     END IF;
-
-                    -- Add new constraint
                     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'unique_account_per_service') THEN
                         ALTER TABLE credentials ADD CONSTRAINT unique_account_per_service UNIQUE (tenant_id, service_name, account_alias);
                     END IF;
                 END $$;
-            """,
+                """,
             )
 
-            logger.info(
-                "Database infrastructure initialized successfully for multi-tenancy."
-            )
-            return  # Éxito total
+            logger.info("Database infrastructure initialized successfully.")
+            return
 
         except Exception as e:
             logger.error(f"Initialization attempt {attempt+1} failed: {e}")
             if attempt == max_retries - 1:
-                logger.error("Max retries reached. Could not initialize database.")
                 raise e
             import time
-
-            time.sleep(2)  # Esperar más tiempo entre reintentos
+            time.sleep(2)
         finally:
             if conn:
                 conn.close()
-
 
 if __name__ == "__main__":
     init_db()

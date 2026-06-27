@@ -133,8 +133,7 @@ class CredentialsCommandHandler:
     ) -> ServiceResponse:
         try:
             logger.info(f"Intentando establecer credencial para tenant {context.tenant_id}, servicio {service}, alias {account_alias}")
-            logger.info(f"API Key (parcial): {api_key[:5]}..., Secret: {secret}, Metadata: {metadata}")
-
+            
             # Upsert credential for this tenant and account alias
             session.execute(
                 text(
@@ -155,39 +154,10 @@ class CredentialsCommandHandler:
                 },
             )
 
-            # --- AUTO-CONFIGURACIÓN DE BOT DE WHATSAPP ---
-            if service == 'whatsapp':
-                logger.info(f"Configurando bot de WhatsApp automáticamente para alias {account_alias}")
-                # 1. Asegurar configuración básica del Bot
-                session.execute(
-                    text(
-                        """
-                        INSERT INTO bot_settings (tenant_id, account_alias, bot_name, welcome_message, farewell_message, handoff_message, support_email, is_global_active)
-                        VALUES (:tid, :alias, 'Asistente Virtual', '¡Hola! Bienvenido. 🤖 Soy tu asistente virtual. ¿En qué puedo ayudarte hoy?', 
-                                'Gracias por contactarnos. ¡Que tengas un gran día! 👋', 'He desactivado el bot. Un agente humano se pondrá en contacto contigo en breve. 👨‍💻', 
-                                'soporte@negocio.com', TRUE)
-                        ON CONFLICT (tenant_id, account_alias) DO NOTHING
-                        """
-                    ),
-                    {"tid": context.tenant_id, "alias": account_alias},
-                )
-
-                # 2. Asegurar Nodo de Inicio básico
-                session.execute(
-                    text(
-                        """
-                        INSERT INTO bot_nodes (tenant_id, account_alias, name, prompt)
-                        VALUES (:tid, :alias, 'inicio', 'Hola, ¿en qué puedo ayudarte?')
-                        ON CONFLICT (tenant_id, account_alias, name) DO NOTHING
-                        """
-                    ),
-                    {"tid": context.tenant_id, "alias": account_alias},
-                )
-
             session.commit()
-            logger.info(f"Credenciales y bot (si aplica) configurados exitosamente para {service} ({account_alias}).")
+            logger.info(f"Credenciales configuradas exitosamente para {service} ({account_alias}).")
             return ServiceResponse.success_res(
-                message=f"Credentials for {service} ({account_alias}) updated successfully and bot configured."
+                message=f"Credentials for {service} ({account_alias}) updated successfully."
             )
         except Exception as e:
             session.rollback()

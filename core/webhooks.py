@@ -207,24 +207,7 @@ async def process_webhook_event(
                     logger.error(f"No se encontró phone_number_id en el payload de Meta: {payload}")
                     return
                 
-                # Buscar el account_alias asociado a este phone_number_id
-                cred = (
-                    session.execute(
-                        text(
-                            "SELECT account_alias FROM credentials WHERE service_name = 'whatsapp' AND tenant_id = :tid AND metadata->>'phone_number_id' = :phone_id"
-                        ),
-                        {"tid": tenant_id, "phone_id": phone_number_id_from_meta},
-                    )
-                    .mappings()
-                    .first()
-                )
-
-                if not cred:
-                    logger.error(f"No se encontró credencial de WhatsApp con phone_number_id {phone_number_id_from_meta} para tenant {tenant_id}")
-                    return
-                
-                account_alias = cred["account_alias"]
-                logger.info(f"Mensaje de WhatsApp para alias: {account_alias}")
+                logger.info(f"Mensaje de WhatsApp recibido para phone_number_id: {phone_number_id_from_meta}")
 
                 msg_type = msg_data.get("type", "text")
                 if msg_type == "text":
@@ -239,7 +222,7 @@ async def process_webhook_event(
                     return
 
                 bot = BotEngine()
-                bot.process_message(session, tenant_id, sender, message, account_alias) # Pasamos el alias
+                bot.process_message(session, tenant_id, sender, message, phone_number_id_from_meta)
             except (IndexError, KeyError, TypeError) as e:
                 logger.error(f"Error parsing Meta payload: {e}")
                 logger.error(f"Payload: {payload}")

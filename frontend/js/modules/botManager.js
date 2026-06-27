@@ -1,6 +1,6 @@
 /**
  * OMNICORE BOT MANAGER MODULE
- * Gestión de perfiles y capacidades de bots especializados.
+ * Gestión profesional de Motores de Bot (Principal y Secundarios).
  */
 
 window.BotManager = {
@@ -8,27 +8,46 @@ window.BotManager = {
         UI.render('app-content', `
             <div class="module-panel">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-lg);">
-                    <h3>🤖 Gestión de Bots Especializados</h3>
-                    <button class="btn btn-outline" onclick="BotManager.showCreateForm()">+ Nuevo Bot</button>
+                    <h3>🤖 Gestión de Motores de Bot</h3>
+                    <button class="btn btn-outline" onclick="BotManager.showCreateBotForm()">+ Nuevo Bot</button>
                 </div>
 
-                <div id="bots-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--spacing-md);">
-                    Cargando bots...
+                <!-- Sección 1: Definición de Motores (Lógica y Permisos) -->
+                <div class="section-container">
+                    <h4>📦 Motores de Bot Disponibles</h4>
+                    <div id="bots-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--spacing-md); margin-bottom: var(--spacing-xl);">
+                        Cargando motores...
+                    </div>
                 </div>
 
+                <!-- Sección 2: Asignación a Números (Canales) -->
+                <div class="section-container">
+                    <h4>📱 Asignación a Números de WhatsApp</h4>
+                    <div id="assignments-list" style="display: flex; flex-direction: column; gap: var(--spacing-md);">
+                        Cargando asignaciones...
+                    </div>
+                </div>
+
+                <!-- Formulario: Crear Bot -->
                 <div id="create-bot-form" style="display: none; margin-top: var(--spacing-lg); padding: var(--spacing-md); background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: var(--radius-md);">
                     <h4>Crear Nuevo Bot</h4>
                     <div style="display: flex; flex-direction: column; gap: var(--spacing-sm); max-width: 400px;">
-                        <input type="text" id="new-bot-name" class="input-field" placeholder="Nombre del Bot (ej: Asistente Ventas)">
-                        <input type="text" id="new-bot-alias" class="input-field" placeholder="Alias único (ej: ventas_bot)">
+                        <input type="text" id="new-bot-name" class="input-field" placeholder="Nombre del Bot (ej: Bot Stock, Bot Ventas)">
                         <div style="display: flex; gap: 10px; margin-top: 10px;">
                             <button class="btn btn-primary" onclick="BotManager.createBot()">Crear Bot</button>
-                            <button class="btn" onclick="BotManager.hideCreateForm()">Cancelar</button>
+                            <button class="btn" onclick="BotManager.hideCreateBotForm()">Cancelar</button>
                         </div>
                     </div>
                 </div>
             </div>
             <style>
+                .section-container {
+                    margin-bottom: var(--spacing-xl);
+                    padding: var(--spacing-md);
+                    background: var(--color-bg-alt);
+                    border-radius: var(--radius-md);
+                    border: 1px solid var(--color-border);
+                }
                 .bot-card {
                     background: white;
                     border: 1px solid var(--color-border);
@@ -37,13 +56,11 @@ window.BotManager = {
                     display: flex;
                     flex-direction: column;
                     gap: var(--spacing-sm);
-                    transition: transform 0.2s;
                 }
-                .bot-card:hover { transform: translateY(-2px); }
                 .bot-card-header {
                     display: flex;
                     justify-content: space-between;
-                    align-items: center;
+                    align-items: flex-start;
                     border-bottom: 1px solid var(--color-border);
                     padding-bottom: var(--spacing-sm);
                     margin-bottom: var(--spacing-sm);
@@ -54,8 +71,24 @@ window.BotManager = {
                     align-items: center;
                     padding: 8px 0;
                     border-bottom: 1px dotted var(--color-border);
+                    font-size: 14px;
                 }
                 .capability-row:last-child { border-bottom: none; }
+                .assignment-row {
+                    background: white;
+                    border: 1px solid var(--color-border);
+                    border-radius: var(--radius-md);
+                    padding: var(--spacing-md);
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: var(--spacing-md);
+                }
+                .assignment-info {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 4px;
+                }
                 .switch {
                     position: relative;
                     display: inline-block;
@@ -85,6 +118,7 @@ window.BotManager = {
             </style>
         `);
         await this.loadBots();
+        await this.loadAssignments();
     },
 
     async loadBots() {
@@ -93,7 +127,7 @@ window.BotManager = {
             const bots = res.data || [];
             
             if (bots.length === 0) {
-                UI.render('bots-grid', '<p class="text-muted">No hay bots configurados. Crea uno para empezar.</p>');
+                UI.render('bots-list', '<p class="text-muted">No hay motores de bot configurados.</p>');
                 return;
             }
 
@@ -103,36 +137,32 @@ window.BotManager = {
                     <div class="bot-card">
                         <div class="bot-card-header">
                             <div>
-                                <strong style="display: block;">${bot.name}</strong>
-                                <small class="text-muted">${bot.account_alias}</small>
+                                <strong>${bot.name}</strong>
+                                <small class="text-muted">ID: ${bot.id}</small>
                             </div>
-                            <span style="font-size: 12px; padding: 2px 6px; border-radius: 10px; background: ${bot.is_active ? '#dcfce7' : '#fee2e2'}; color: ${bot.is_active ? '#166534' : '#991b1b'};">
-                                ${bot.is_active ? 'Activo' : 'Inactivo'}
-                            </span>
                         </div>
-                        
                         <div class="capabilities-list">
                             <div class="capability-row">
                                 <span>📦 Acceso a Stock</span>
                                 <label class="switch">
                                     <input type="checkbox" ${caps.can_manage_stock ? 'checked' : ''} 
-                                           onchange="BotManager.toggleCapability('${bot.account_alias}', 'can_manage_stock', this.checked)">
+                                           onchange="BotManager.toggleCapability('${bot.id}', 'can_manage_stock', this.checked)">
                                     <span class="slider"></span>
                                 </label>
                             </div>
                             <div class="capability-row">
-                                <span>🛒 Gestión de Ventas</span>
+                                <span>🛒 Ventas / Cobros</span>
                                 <label class="switch">
                                     <input type="checkbox" ${caps.can_sell ? 'checked' : ''} 
-                                           onchange="BotManager.toggleCapability('${bot.account_alias}', 'can_sell', this.checked)">
+                                           onchange="BotManager.toggleCapability('${bot.id}', 'can_sell', this.checked)">
                                     <span class="slider"></span>
                                 </label>
                             </div>
                             <div class="capability-row">
-                                <span>💳 Pagos (Link / QR / MP)</span>
+                                <span>💳 Mercado Pago / API</span>
                                 <label class="switch">
                                     <input type="checkbox" ${caps.can_process_payments ? 'checked' : ''} 
-                                           onchange="BotManager.toggleCapability('${bot.account_alias}', 'can_process_payments', this.checked)">
+                                           onchange="BotManager.toggleCapability('${bot.id}', 'can_process_payments', this.checked)">
                                     <span class="slider"></span>
                                 </label>
                             </div>
@@ -141,57 +171,137 @@ window.BotManager = {
                 `;
             }).join('');
 
-            UI.render('bots-grid', html);
+            UI.render('bots-list', html);
         } catch (e) {
             UI.toast(`Error cargando bots: ${e.message}`, 'error');
         }
     },
 
-    async toggleCapability(alias, capKey, value) {
+    async toggleCapability(botId, capKey, value) {
         try {
             UI.showLoading();
-            // Primero obtenemos el estado actual para no sobrescribir otras capacidades
+            // Obtenemos el bot actual para preservar otras capacidades
             const res = await API.execute('bot.list', {});
-            const bot = (res.data || []).find(b => b.account_alias === alias);
+            const bot = (res.data || []).find(b => b.id === botId);
             
             if (!bot) throw new Error('Bot no encontrado');
 
             const updatedCaps = { ...bot.capabilities, [capKey]: value };
             
             await API.execute('bot.update_capabilities', { 
-                account_alias: alias, 
+                bot_profile_id: botId, 
                 capabilities: updatedCaps 
             });
 
             UI.toast(`Capacidad ${capKey} actualizada`, 'success');
         } catch (e) {
             UI.toast(`Error actualizando capacidad: ${e.message}`, 'error');
-            await this.loadBots(); // Reset switches to previous state
+            await this.loadBots(); 
         } finally {
             UI.hideLoading();
         }
     },
 
-    showCreateForm() {
+    async loadAssignments() {
+        try {
+            const credRes = await API.execute('whatsapp.list_credentials', {});
+            const credentials = credRes.data || [];
+            
+            const botRes = await API.execute('bot.list', {});
+            const bots = botRes.data || [];
+
+            if (credentials.length === 0) {
+                UI.render('assignments-list', '<p class="text-muted">No hay credenciales de WhatsApp configuradas.</p>');
+                return;
+            }
+
+            const html = credentials.map(cred => {
+                const meta = typeof cred.metadata === 'string' ? JSON.parse(cred.metadata) : cred.metadata;
+                const phoneId = meta.phone_number_id || 'S/N';
+                
+                return `
+                    <div class="assignment-row">
+                        <div class="assignment-info">
+                            <strong>${cred.account_alias}</strong>
+                            <small class="text-muted">Phone ID: ${phoneId}</small>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <select class="input-field" style="width: 150px;" onchange="BotManager.assignBot('${cred.credential_id}', this.value)">
+                                <option value="">Seleccionar Bot</option>
+                                ${bots.map(b => `<option value="${b.id}" ${cred.bot_profile_id === b.id ? 'selected' : ''}>${b.name}</option>`).join('')}
+                            </select>
+                            <label class="switch">
+                                <input type="checkbox" onchange="BotManager.toggleBotStatus('${cred.credential_id}', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            UI.render('assignments-list', html);
+        } catch (e) {
+            UI.toast(`Error cargando asignaciones: ${e.message}`, 'error');
+        }
+    },
+
+    async assignBot(credentialId, botId) {
+        try {
+            UI.showLoading();
+            await API.execute('bot.assign', { 
+                credential_id: credentialId, 
+                bot_profile_id: botId 
+            });
+            UI.toast(`Bot asignado correctamente`, 'success');
+        } catch (e) {
+            UI.toast(`Error asignando bot: ${e.message}`, 'error');
+        } finally {
+            UI.hideLoading();
+        }
+    },
+
+    async toggleBotStatus(credentialId, isActive) {
+        try {
+            UI.showLoading();
+            const res = await API.execute('whatsapp.list_credentials', {});
+            const cred = (res.data || []).find(c => c.credential_id === credentialId);
+            
+            if (!cred) throw new Error('Credencial no encontrada');
+            
+            const meta = typeof cred.metadata === 'string' ? JSON.parse(cred.metadata) : cred.metadata;
+            const phone = meta.phone_number || 'unknown'; 
+
+            await API.execute('whatsapp.toggle_bot', { 
+                phone_number: phone, 
+                is_active: isActive 
+            });
+            UI.toast(`Estado del bot actualizado`, 'success');
+        } catch (e) {
+            UI.toast(`Error actualizando estado: ${e.message}`, 'error');
+        } finally {
+            UI.hideLoading();
+        }
+    },
+
+    showCreateBotForm() {
         document.getElementById('create-bot-form').style.display = 'block';
     },
 
-    hideCreateForm() {
+    hideCreateBotForm() {
         document.getElementById('create-bot-form').style.display = 'none';
     },
 
     async createBot() {
         const name = document.getElementById('new-bot-name').value;
-        const alias = document.getElementById('new-bot-alias').value;
-        
-        if (!name || !alias) return UI.toast('Nombre y Alias son requeridos', 'error');
+        if (!name) return UI.toast('El nombre es requerido', 'error');
 
         try {
             UI.showLoading();
-            await API.execute('bot.create', { name, account_alias: alias });
-            UI.toast('Bot creado exitosamente', 'success');
-            this.hideCreateForm();
+            await API.execute('bot.create', { name });
+            UI.toast('Motor de Bot creado exitosamente', 'success');
+            this.hideCreateBotForm();
             await this.loadBots();
+            await this.loadAssignments();
         } catch (e) {
             UI.toast(`Error al crear bot: ${e.message}`, 'error');
         } finally {
