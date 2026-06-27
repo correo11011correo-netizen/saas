@@ -22,24 +22,26 @@ window.Sales = {
         if (panelId === 'pos') await this.loadProducts();
     },
 
+    allProducts: [],
+
     async renderPOS() {
         return `
-            <div class="pos-layout" style="display: flex; flex-direction: column; gap: var(--spacing-md);">
-                <div class="products-section">
-                    <h3>Productos</h3>
+            <div class="pos-layout" style="display: flex; flex-direction: column; gap: var(--spacing-md); height: 100%;">
+                <div class="products-section" style="flex: 2; overflow-y: auto;">
+                    <h3>Venta Rápida</h3>
+                    <input type="text" id="product-search" class="input-field" placeholder="Buscar producto (nombre o código)..." oninput="Sales.filterProducts(this.value)">
                     <div id="products-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--spacing-sm);">Cargando...</div>
                 </div>
                 <div class="cart-section" style="background: white; padding: var(--spacing-md); border-radius: var(--radius-md); border: 1px solid var(--color-border);">
                     <h3>Carrito</h3>
-                    <div id="cart-list" style="max-height: 200px; overflow-y: auto;">Vacio</div>
-                    <div id="cart-total" style="font-weight: 700; margin-top: var(--spacing-md); font-size: 1.2em;">Total: $0</div>
-                    <button class="btn btn-primary" style="width: 100%; margin-top: var(--spacing-md);" onclick="Sales.checkout()">Generar Cobro</button>
+                    <div id="cart-list" style="max-height: 300px; overflow-y: auto; margin-bottom: var(--spacing-md);">Vacio</div>
+                    <div id="cart-total" style="font-weight: 700; font-size: 1.5em; color: var(--color-primary);">Total: $0</div>
+                    <button class="btn btn-primary" style="width: 100%; margin-top: var(--spacing-md);" onclick="Sales.checkout()">Cobrar</button>
                 </div>
             </div>
             <style>
                 @media (min-width: 768px) {
-                    .pos-layout { flex-direction: row !important; }
-                    .products-section { flex: 2; }
+                    .pos-layout { flex-direction: row !important; height: calc(100vh - 150px) !important; }
                     .cart-section { flex: 1; height: fit-content; position: sticky; top: 10px; }
                 }
             </style>
@@ -49,16 +51,29 @@ window.Sales = {
     async loadProducts() {
         try {
             const res = await API.execute('products.list', {});
-            const products = res.data || [];
-            UI.render('products-list', products.map(p => `
-                <div style="padding: 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); cursor: pointer;" onclick="Sales.addToCart(${JSON.stringify(p).replace(/"/g, '&quot;')})">
-                    <div style="font-weight: 600;">${p.name}</div>
-                    <div style="font-size: 12px;">$${p.price}</div>
-                </div>
-            `).join(''));
+            this.allProducts = res.data || [];
+            this.renderProductList(this.allProducts);
         } catch (e) {
             UI.toast('Error cargando stock', 'error');
         }
+    },
+
+    filterProducts(query) {
+        const q = query.toLowerCase();
+        const filtered = this.allProducts.filter(p => 
+            p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)
+        );
+        this.renderProductList(filtered);
+    },
+
+    renderProductList(products) {
+        UI.render('products-list', products.map(p => `
+            <div class="module-card" style="padding: 10px; border: 1px solid var(--color-border); cursor: pointer;" onclick="Sales.addToCart(${JSON.stringify(p).replace(/"/g, '&quot;')})">
+                <div style="font-weight: 600; font-size: 0.9em;">${p.name}</div>
+                <div style="font-size: 0.8em; color: var(--color-text-muted);">${p.code}</div>
+                <div style="color: var(--color-primary); font-weight: 700;">$${p.price}</div>
+            </div>
+        `).join(''));
     },
 
     addToCart(product) {
