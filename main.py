@@ -21,7 +21,7 @@ from core.commands import core_commands
 from core.credentials import credentials_commands
 from sales.commands import sales_commands
 from stock.commands import stock_commands
-from whatsapp.commands import whatsapp_commands
+from whatsapp.commands import whatsapp_commands, bot_manager_commands
 
 # ... (Database setup and FastAPI app setup remain as before, I will keep the existing code and just clean up the functions below)
 
@@ -53,6 +53,7 @@ async def lifespan(app: FastAPI):
     dispatcher.register_handler(sales_commands)
     dispatcher.register_handler(stock_commands)
     dispatcher.register_handler(whatsapp_commands)
+    dispatcher.register_handler(bot_manager_commands)
 
     # Inject DB factory into Webhooks AND Dispatcher
     from core.webhooks import set_db_session_factory
