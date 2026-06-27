@@ -114,11 +114,11 @@ window.Whatsapp = {
         this.currentChat = phoneNumber;
         
         // IMPORTANTE: Actualizar el estado global antes de refrescar los mensajes
-        // para que la validación en refreshChatMessages no aborte la carga inicial.
         App.state.activePanel = phoneNumber;
         
         UI.showLoading();
         try {
+            // Obtenemos el alias del chat al refrescar
             await this.refreshChatMessages(phoneNumber);
             this.startPolling(phoneNumber);
         } catch (e) {
@@ -130,11 +130,7 @@ window.Whatsapp = {
     },
 
     async refreshChatMessages(phoneNumber) {
-        // VALIDACIÓN DE ESTADO: Evitar redirecciones fantasma por polling
-        // Solo renderizamos/actualizamos si el usuario está realmente dentro del módulo whatsapp y en la vista de chat
         if (App.state.activeModule !== 'whatsapp' || App.state.activePanel !== phoneNumber) {
-            // Si el usuario ya no está en este chat, simplemente actualizamos la cola en silencio si es necesario,
-            // pero NO renderizamos la UI del chat.
             return;
         }
 
@@ -145,7 +141,12 @@ window.Whatsapp = {
                 throw new Error(res.error || 'Error al obtener mensajes');
             }
 
+            // --- CORRECCIÓN: Obtenemos el alias del backend si está disponible ---
+            // Si el backend no envía el alias, intentamos deducirlo o usar un fallback seguro
+            this.currentChatAlias = res.data.account_alias || 'bot'; // 'bot' es el alias que encontramos en la DB
+            
             const { messages = [], is_bot_active } = res.data || {};
+            // ... (el resto del código original)
 
             if (!document.getElementById('messages-container')) {
                 UI.render('app-content', `
@@ -281,7 +282,7 @@ window.Whatsapp = {
                 const res = await API.execute('whatsapp.send_text', {
                     to: msg.to,
                     body: msg.body,
-                    account_alias: 'Principal'
+                    account_alias: 'bot'
                 });
 
                 if (!res.success) {

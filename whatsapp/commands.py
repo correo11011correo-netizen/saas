@@ -346,10 +346,23 @@ class WhatsappCommandHandler:
         context: TenantContext,
         to: str,
         body: str,
-        account_alias: str,
+        account_alias: str = None,
         sender_type: str = "bot",
     ) -> ServiceResponse:
         try:
+            # 0. Si no se proporciona alias, obtener el alias activo de la sesión
+            if not account_alias:
+                session_data = session.execute(
+                    text("SELECT account_alias FROM whatsapp_sessions WHERE phone_number = :phone AND tenant_id = :tid LIMIT 1"),
+                    {"phone": to, "tid": context.tenant_id}
+                ).mappings().first()
+                if session_data:
+                    account_alias = session_data['account_alias']
+            
+            # Fallback a 'bot' si aun no hay alias
+            if not account_alias:
+                account_alias = 'bot'
+
             logger.info(f"Intentando enviar mensaje a {to} usando alias {account_alias}")
             # 1. Fetch credentials
             cred = (
@@ -364,10 +377,19 @@ class WhatsappCommandHandler:
             )
 
             if not cred:
-                logger.error(f"No se encontraron credenciales de WhatsApp para tenant {context.tenant_id} y alias {account_alias}")
-                return ServiceResponse.error_res(
-                    "WhatsApp credentials not found", "WHATSAPP_CREDS_ERROR"
-                )
+                # Intento fallback a 'bot' si el alias original falló
+                if account_alias != 'bot':
+                    logger.warning(f"No se encontraron credenciales con alias {account_alias}, intentando con 'bot'")
+                    cred = session.execute(
+                        text("SELECT api_key, metadata FROM credentials WHERE service_name = 'whatsapp' AND account_alias = 'bot' AND tenant_id = :tid"),
+                        {"tid": context.tenant_id}
+                    ).mappings().first()
+                
+                if not cred:
+                    logger.error(f"No se encontraron credenciales de WhatsApp para tenant {context.tenant_id} y alias {account_alias}")
+                    return ServiceResponse.error_res(
+                        "WhatsApp credentials not found", "WHATSAPP_CREDS_ERROR"
+                    )
             
             logger.info(f"Credenciales encontradas. api_key (parcial): {cred['api_key'][:5]}..., metadata: {cred['metadata']}")
 
