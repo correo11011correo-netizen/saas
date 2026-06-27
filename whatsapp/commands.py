@@ -350,6 +350,7 @@ class WhatsappCommandHandler:
         sender_type: str = "bot",
     ) -> ServiceResponse:
         try:
+            logger.info(f"Intentando enviar mensaje a {to} usando alias {account_alias}")
             # 1. Fetch credentials
             cred = (
                 session.execute(
@@ -363,14 +364,25 @@ class WhatsappCommandHandler:
             )
 
             if not cred:
+                logger.error(f"No se encontraron credenciales de WhatsApp para tenant {context.tenant_id} y alias {account_alias}")
                 return ServiceResponse.error_res(
                     "WhatsApp credentials not found", "WHATSAPP_CREDS_ERROR"
                 )
+            
+            logger.info(f"Credenciales encontradas. api_key (parcial): {cred['api_key'][:5]}..., metadata: {cred['metadata']}")
 
             import json
 
             meta = json.loads(cred["metadata"])
             phone_number_id = meta.get("phone_number_id")
+
+            if not phone_number_id:
+                logger.error(f"phone_number_id no encontrado en el metadata de las credenciales para alias {account_alias}")
+                return ServiceResponse.error_res(
+                    "Phone Number ID not found in WhatsApp credentials metadata", "WHATSAPP_PHONE_ID_ERROR"
+                )
+
+            logger.info(f"phone_number_id: {phone_number_id}")
 
             # 2. Call Meta API
             import requests
