@@ -45,12 +45,12 @@ window.Stock = {
 
     async renderInventory() {
         UI.render('app-content', `
-            <div class="stock-container" style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
+            <div class="module-panel" style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
                 <header style="display: flex; justify-content: space-between; align-items: center;">
                     <h3>${Icons.box} Administración de Stock</h3>
-                    <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="Stock.showAddProduct()">+ Producto</button>
+                    <button class="btn btn-primary" onclick="Stock.showAddProduct()">+ Producto</button>
                 </header>
-                <div id="stock-list" style="display: flex; flex-direction: column; gap: var(--spacing-sm);">
+                <div id="stock-list" class="modules-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--spacing-md);">
                     <p class="text-muted">Cargando productos...</p>
                 </div>
             </div>
@@ -69,18 +69,14 @@ window.Stock = {
             }
 
             const listHtml = products.map(p => `
-                <div style="background: white; padding: var(--spacing-md); border-radius: var(--radius-md); border: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; box-shadow: var(--shadow-sm);">
-                    <div>
-                        <div style="font-weight: 600;">${p.name}</div>
-                        <div class="text-muted" style="font-size: 12px;">Código: ${p.code} | Cat: ${p.category}</div>
-                    </div>
-                    <div style="text-align: right; display: flex; align-items: center; gap: 15px;">
-                        <div style="font-weight: 700; color: var(--color-primary);">$${p.price}</div>
-                        <div style="display: flex; align-items: center; gap: 5px;">
-                            <button class="btn" style="padding: 2px 6px; font-size: 10px;" onclick="Stock.adjustStock('${p.code}', -1)">-</button>
-                            <div style="font-size: 12px; min-width: 20px; text-align: center;">${p.quantity}</div>
-                            <button class="btn" style="padding: 2px 6px; font-size: 10px;" onclick="Stock.adjustStock('${p.code}', 1)">+</button>
-                        </div>
+                <div class="module-card" style="padding: var(--spacing-md); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: white;">
+                    <div style="font-weight: 600; margin-bottom: 5px;">${p.name}</div>
+                    <div class="text-muted" style="font-size: 12px; margin-bottom: 10px;">Cód: ${p.code} | Cat: ${p.category}</div>
+                    <div style="font-weight: 700; color: var(--color-primary); font-size: 1.1em; margin-bottom: 10px;">$${p.price}</div>
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 10px; border-top: 1px solid var(--color-border); padding-top: 10px;">
+                        <button class="btn btn-outline" onclick="Stock.adjustStock('${p.code}', -1)">-</button>
+                        <div style="font-weight: 700; min-width: 30px; text-align: center;">${p.quantity}</div>
+                        <button class="btn btn-outline" onclick="Stock.adjustStock('${p.code}', 1)">+</button>
                     </div>
                 </div>
             `).join('');
