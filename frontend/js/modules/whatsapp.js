@@ -317,59 +317,78 @@ window.Whatsapp = {
         }
     },
 
+    currentBotAlias: null,
+
     async renderBotStudio() {
-        return `
-            <div style="padding: var(--spacing-md); display: flex; flex-direction: column; gap: var(--spacing-lg);">
-                <section>
-                    <h3>⚙️ Configuración Global (Sectores)</h3>
-                    <div style="background: var(--color-bg-alt); padding: var(--spacing-md); border-radius: var(--radius-md); border: 1px solid var(--color-border); display: grid; gap: 10px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                            <strong>Estado del Bot</strong>
-                            <input type="checkbox" id="bot-global-active" onchange="Whatsapp.updateSettings({is_global_active: this.checked})">
+        try {
+            const res = await API.execute('bot.list', {});
+            const bots = res.data || [];
+            if (bots.length === 0) return '<p>No hay bots configurados. Crea uno en Gestionar Bots.</p>';
+            
+            // Si no hay bot seleccionado, tomamos el primero
+            if (!this.currentBotAlias) this.currentBotAlias = bots[0].account_alias;
+
+            const optionsHtml = bots.map(b => `<option value="${b.account_alias}" ${this.currentBotAlias === b.account_alias ? 'selected' : ''}>${b.name} (${b.account_alias})</option>`).join('');
+
+            return `
+                <div style="padding: var(--spacing-md); display: flex; flex-direction: column; gap: var(--spacing-lg);">
+                    <select class="input-field" onchange="Whatsapp.selectBot(this.value)">
+                        ${optionsHtml}
+                    </select>
+                    <section>
+                        <h3>⚙️ Configuración Global (${this.currentBotAlias})</h3>
+                        <div style="background: var(--color-bg-alt); padding: var(--spacing-md); border-radius: var(--radius-md); border: 1px solid var(--color-border); display: grid; gap: 10px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <strong>Estado del Bot</strong>
+                                <input type="checkbox" id="bot-global-active" onchange="Whatsapp.updateSettings({is_global_active: this.checked})">
+                            </div>
+                            <label>Nombre del Bot</label>
+                            <input type="text" id="bot-name" class="input-field" onblur="Whatsapp.updateSettings({bot_name: this.value})">
+
+                            <label>Mensaje de Bienvenida</label>
+                            <textarea id="bot-welcome" class="input-field" rows="3" onblur="Whatsapp.updateSettings({welcome_message: this.value})"></textarea>
+
+                            <label>Mensaje de Despedida</label>
+                            <textarea id="bot-farewell" class="input-field" rows="2" onblur="Whatsapp.updateSettings({farewell_message: this.value})"></textarea>
+
+                            <label>Mensaje de Derivación</label>
+                            <textarea id="bot-handoff" class="input-field" rows="2" onblur="Whatsapp.updateSettings({handoff_message: this.value})"></textarea>
                         </div>
-                        <label>Nombre del Bot</label>
-                        <input type="text" id="bot-name" class="input-field" onblur="Whatsapp.updateSettings({bot_name: this.value})">
+                    </section>
 
-                        <label>Mensaje de Bienvenida (Sector Bienvenida)</label>
-                        <textarea id="bot-welcome" class="input-field" rows="3" onblur="Whatsapp.updateSettings({welcome_message: this.value})"></textarea>
-
-                        <label>Mensaje de Despedida (Sector Despedida)</label>
-                        <textarea id="bot-farewell" class="input-field" rows="2" onblur="Whatsapp.updateSettings({farewell_message: this.value})"></textarea>
-
-                        <label>Mensaje de Derivación (Sector Humano)</label>
-                        <textarea id="bot-handoff" class="input-field" rows="2" onblur="Whatsapp.updateSettings({handoff_message: this.value})"></textarea>
-
-                        <label>Email de Soporte</label>
-                        <input type="email" id="bot-email" class="input-field" onblur="Whatsapp.updateSettings({support_email: this.value})"></textarea>
-                    </div>
-                </section>
-
-                <section>
-                    <h3>🛠️ Flujo de Nodos</h3>
-                    <div id="nodes-list" style="margin-bottom: var(--spacing-md);">Cargando nodos...</div>
-                    <div style="border: 1px solid var(--color-border); padding: var(--spacing-md); border-radius: var(--radius-md); background: var(--color-bg-alt);">
-                        <h4>Nuevo Nodo Interactivo</h4>
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <input type="text" id="new-node-name" class="input-field" placeholder="Nombre del nodo (ej: productos)">
-                            <textarea id="new-node-prompt" class="input-field" placeholder="Mensaje que verá el cliente"></textarea>
-                            <button class="btn btn-primary" onclick="Whatsapp.saveNode()">Guardar Nodo</button>
+                    <section>
+                        <h3>🛠️ Flujo de Nodos</h3>
+                        <div id="nodes-list" style="margin-bottom: var(--spacing-md);">Cargando nodos...</div>
+                        <div style="border: 1px solid var(--color-border); padding: var(--spacing-md); border-radius: var(--radius-md); background: var(--color-bg-alt);">
+                            <h4>Nuevo Nodo Interactivo</h4>
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <input type="text" id="new-node-name" class="input-field" placeholder="Nombre (ej: inicio)">
+                                <textarea id="new-node-prompt" class="input-field" placeholder="Mensaje para el cliente"></textarea>
+                                <button class="btn btn-primary" onclick="Whatsapp.saveNode()">Guardar Nodo</button>
+                            </div>
                         </div>
-                    </div>
-                </section>
-            </div>
-        `;
+                    </section>
+                </div>
+            `;
+        } catch (e) {
+            return `<p>Error cargando bots: ${e.message}</p>`;
+        }
+    },
+
+    async selectBot(alias) {
+        this.currentBotAlias = alias;
+        await this.render('bot_studio');
     },
 
     async loadSettings() {
         try {
-            const res = await API.execute('bot.settings.get', {});
+            const res = await API.execute('bot.settings.get', { account_alias: this.currentBotAlias });
             const s = res.data;
             document.getElementById('bot-global-active').checked = s.is_global_active;
             document.getElementById('bot-name').value = s.bot_name || '';
             document.getElementById('bot-welcome').value = s.welcome_message || '';
             document.getElementById('bot-farewell').value = s.farewell_message || '';
             document.getElementById('bot-handoff').value = s.handoff_message || '';
-            document.getElementById('bot-email').value = s.support_email || '';
         } catch (e) {
             UI.toast('Error cargando configuración', 'error');
         }
@@ -377,7 +396,7 @@ window.Whatsapp = {
 
     async updateSettings(params) {
         try {
-            await API.execute('bot.settings.update', params);
+            await API.execute('bot.settings.update', { ...params, account_alias: this.currentBotAlias });
             UI.toast('Configuración actualizada', 'success');
         } catch (e) {
             UI.toast(e.message, 'error');
@@ -386,15 +405,14 @@ window.Whatsapp = {
 
     async loadNodes() {
         try {
-            const res = await API.execute('bot.node.list', {});
+            const res = await API.execute('bot.node.list', { account_alias: this.currentBotAlias });
             const nodes = res.data || [];
             UI.render('nodes-list', nodes.map(n => `
                 <div style="padding: 15px; border: 1px solid var(--color-border); margin-bottom: 10px; border-radius: var(--radius-sm); background: white;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                         <strong style="color: var(--color-primary);">${n.name}</strong>
-                        <span style="font-size: 10px; opacity: 0.5;">${n.id}</span>
                     </div>
-                    <div style="font-size: 13px; margin-bottom: 10px; color: var(--color-text);">${n.prompt}</div>
+                    <div style="font-size: 13px; margin-bottom: 10px;">${n.prompt}</div>
                     <div id="options-${n.id}" style="margin-bottom: 10px; border-left: 2px solid var(--color-border); padding-left: 10px;">Cargando opciones...</div>
                     <div style="display: flex; gap: 5px;">
                         <input type="text" id="opt-label-${n.id}" class="input-field" style="margin: 0;" placeholder="Ej: 1">
@@ -413,13 +431,13 @@ window.Whatsapp = {
 
     async loadOptions(nodeId) {
         try {
-            const res = await API.execute('bot.option.list', { node_id: nodeId });
+            const res = await API.execute('bot.option.list', { account_alias: this.currentBotAlias, node_id: nodeId });
             const options = res.data || [];
             UI.render(`options-${nodeId}`, options.map(o => `
                 <div style="font-size: 12px; margin-bottom: 4px; display: flex; align-items: center; gap: 5px;">
-                    <span style="color: var(--color-primary);">➔</span> ${o.label} <small style="opacity: 0.6;">(${o.next_node_id || o.action})</small>
+                    <span style="color: var(--color-primary);">➔</span> ${o.label}
                 </div>
-            `).join('') || '<div style="font-size: 11px; opacity: 0.5;">Sin opciones configuradas</div>');
+            `).join('') || '<div style="font-size: 11px; opacity: 0.5;">Sin opciones</div>');
         } catch (e) {
             UI.render(`options-${nodeId}`, 'Error cargando opciones');
         }
@@ -431,7 +449,7 @@ window.Whatsapp = {
         if (!name || !prompt) return UI.toast('Nombre y prompt requeridos', 'error');
 
         try {
-            await API.execute('bot.node.save', { name, prompt });
+            await API.execute('bot.node.save', { account_alias: this.currentBotAlias, name, prompt });
             UI.toast('Nodo guardado', 'success');
             this.loadNodes();
             document.getElementById('new-node-name').value = '';
@@ -446,7 +464,7 @@ window.Whatsapp = {
         if (!label) return UI.toast('Label requerido', 'error');
 
         try {
-            await API.execute('bot.option.add', { node_id: nodeId, label });
+            await API.execute('bot.option.add', { account_alias: this.currentBotAlias, node_id: nodeId, label });
             UI.toast('Opción añadida', 'success');
             this.loadOptions(nodeId);
             document.getElementById(`opt-label-${nodeId}`).value = '';
