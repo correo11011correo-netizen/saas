@@ -55,6 +55,10 @@ const App = {
                             <div class="module-card-icon">${Icons.whatsapp}</div>
                             <div class="module-card-label">WhatsApp</div>
                         </div>
+                        <div class="module-card" onclick="App.loadModule('botManager')">
+                            <div class="module-card-icon">${Icons.settings}</div>
+                            <div class="module-card-label">Gestión de Bots</div>
+                        </div>
                         <div class="module-card" onclick="App.loadModule('profile')">
                             <div class="module-card-icon">${Icons.user}</div>
                             <div class="module-card-label">Perfil</div>
