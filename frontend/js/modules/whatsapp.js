@@ -13,7 +13,7 @@ window.Whatsapp = {
         dock: [
             { id: 'messages', icon: 'whatsapp', label: 'Mensajes' },
             { id: 'bot_studio', icon: 'settings', label: 'Bot Studio' },
-            { id: 'api_keys', icon: 'key', label: 'API Keys' }
+            { id: 'bot_manager', icon: 'settings', label: 'Gestionar Bots' }, { id: 'api_keys', icon: 'key', label: 'API Keys' }
         ]
     },
 
@@ -44,7 +44,7 @@ window.Whatsapp = {
             content = await this.renderBotStudio();
         } else if (panelId === 'messages') {
             content = await this.renderMessages();
-        } else if (panelId === 'api_keys') {
+        } else if (panelId === 'bot_manager') { content = await this.renderBotManager(); } else if (panelId === 'api_keys') {
             content = `<div style="padding: var(--spacing-md);"><p>Gestión de API Keys (Ver Perfil)</p></div>`;
         } else {
             content = `<p>Panel ${panelId} en desarrollo...</p>`;
@@ -61,6 +61,8 @@ window.Whatsapp = {
             await this.loadSettings();
         } else if (panelId === 'messages') {
             await this.loadConversations();
+        } else if (panelId === 'bot_manager') {
+            await this.loadBots();
             this.startListPolling();
         }
     },
@@ -455,3 +457,66 @@ window.Whatsapp = {
 };
 
 window.Whatsapp = Whatsapp;
+
+    async renderBotManager() {
+        return `
+            <div style="padding: var(--spacing-md); display: flex; flex-direction: column; gap: var(--spacing-lg);">
+                <section>
+                    <h3>🤖 Gestión de Bots Especializados</h3>
+                    <div id="bots-list" style="margin-bottom: var(--spacing-md);">Cargando bots...</div>
+                    <div style="border: 1px solid var(--color-border); padding: var(--spacing-md); border-radius: var(--radius-md); background: var(--color-bg-alt);">
+                        <h4>Crear Nuevo Bot</h4>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <input type="text" id="new-bot-name" class="input-field" placeholder="Nombre (ej: Bot Vendedor)">
+                            <input type="text" id="new-bot-alias" class="input-field" placeholder="Alias (ej: vendedor)">
+                            <button class="btn btn-primary" onclick="Whatsapp.createBot()">Crear Bot</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        `;
+    },
+
+    async loadBots() {
+        try {
+            const res = await API.execute('bot.list', {});
+            const bots = res.data || [];
+            UI.render('bots-list', bots.map(b => `
+                <div style="padding: 15px; border: 1px solid var(--color-border); margin-bottom: 10px; border-radius: var(--radius-sm); background: white;">
+                    <div style="font-weight: 600; margin-bottom: 5px;">${b.name} (${b.account_alias})</div>
+                    <div style="font-size: 12px; margin-bottom: 10px;">
+                        Capacidades: ${JSON.stringify(b.capabilities)}
+                    </div>
+                    <button class="btn btn-sm" onclick="Whatsapp.toggleCapability('${b.account_alias}', 'can_sell', ${JSON.stringify(b.capabilities)})">Toggle Venta</button>
+                </div>
+            `).join('') || '<p>No hay bots creados.</p>');
+        } catch (e) {
+            UI.toast('Error cargando bots', 'error');
+        }
+    },
+
+    async createBot() {
+        const name = document.getElementById('new-bot-name').value;
+        const alias = document.getElementById('new-bot-alias').value;
+        if (!name || !alias) return UI.toast('Nombre y alias requeridos', 'error');
+        try {
+            await API.execute('bot.create', { name, account_alias: alias });
+            UI.toast('Bot creado', 'success');
+            this.loadBots();
+            document.getElementById('new-bot-name').value = '';
+            document.getElementById('new-bot-alias').value = '';
+        } catch (e) {
+            UI.toast(e.message, 'error');
+        }
+    },
+
+    async toggleCapability(alias, capability, currentCaps) {
+        try {
+            const newCaps = { ...currentCaps, [capability]: !currentCaps[capability] };
+            await API.execute('bot.update_capabilities', { account_alias: alias, capabilities: newCaps });
+            UI.toast('Capacidades actualizadas', 'success');
+            this.loadBots();
+        } catch (e) {
+            UI.toast(e.message, 'error');
+        }
+    },
