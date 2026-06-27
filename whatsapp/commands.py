@@ -395,7 +395,12 @@ class WhatsappCommandHandler:
 
             import json
 
-            meta = json.loads(cred["metadata"])
+            # CORRECCIÓN: Verificar si metadata ya es un dict
+            if isinstance(cred["metadata"], dict):
+                meta = cred["metadata"]
+            else:
+                meta = json.loads(cred["metadata"])
+            
             phone_number_id = meta.get("phone_number_id")
 
             if not phone_number_id:
