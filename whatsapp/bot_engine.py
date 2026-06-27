@@ -212,9 +212,7 @@ class BotEngine:
                     
                     msg_switch = f"Cambiando al modo: {new_settings['bot_name']}... 🤖"
                     if node_inicio_nuevo:
-                        msg_switch += f"
-
-{node_inicio_nuevo['prompt']}"
+                        msg_switch += f"\\n\\n{node_inicio_nuevo['prompt']}"
                         session.execute(
                             text("UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid"),
                             {"nid": node_inicio_nuevo["id"], "phone": sender, "tid": tenant_id}
