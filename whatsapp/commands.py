@@ -574,3 +574,4 @@ class BotManagerCommandHandler:
             return ServiceResponse.error_res(f"Error updating capabilities: {str(e)}", "BOT_UPDATE_ERROR")
 
 bot_manager_commands = BotManagerCommandHandler()
+whatsapp_commands = WhatsappCommandHandler()
