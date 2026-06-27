@@ -161,9 +161,7 @@ class BotEngine:
 
             msg_final = settings["welcome_message"]
             if node_inicio:
-                msg_final += f"
-
-{node_inicio['prompt']}"
+                msg_final += f"\\n\\n{node_inicio['prompt']}"
 
             self._send_immediate_response(session, tenant_id, sender, msg_final, active_bot_profile_id)
 
