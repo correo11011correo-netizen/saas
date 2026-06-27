@@ -231,6 +231,7 @@ window.Whatsapp = {
 
     async sendMessage(phoneNumber) {
         const input = document.getElementById('msg-input');
+        if (!input) return;
         const body = input.value.trim();
         if (!body) return;
 
@@ -245,12 +246,18 @@ window.Whatsapp = {
 
         this.messageQueue.push(message);
         input.value = '';
+        
+        // Forzamos el refresco visual inmediato para que el usuario vea su mensaje en "pendiente"
         await this.refreshChatMessages(phoneNumber);
-        this.processQueue();
+        
+        // Iniciamos el procesamiento de la cola
+        await this.processQueue();
     },
 
     async processQueue() {
         if (this.messageQueue.length === 0) return;
+
+        console.log(`[Whatsapp] Procesando cola de mensajes: ${this.messageQueue.length} pendientes`);
 
         for (let i = 0; i < this.messageQueue.length; i++) {
             const msg = this.messageQueue[i];
@@ -258,19 +265,27 @@ window.Whatsapp = {
 
             msg.status = 'sending';
             try {
-                await API.execute('whatsapp.send_text', {
+                const res = await API.execute('whatsapp.send_text', {
                     to: msg.to,
                     body: msg.body,
                     account_alias: 'Principal'
                 });
+
+                if (!res.success) {
+                    throw new Error(res.error || 'Error en el servidor al enviar');
+                }
+
+                // Éxito: eliminamos de la cola
                 this.messageQueue = this.messageQueue.filter(m => m.id !== msg.id);
+                
                 if (this.currentChat === msg.to) {
                     await this.refreshChatMessages(msg.to);
                 }
             } catch (e) {
-                console.error(`Failed to send message ${msg.id}:`, e);
+                console.error(`[Whatsapp] Error enviando mensaje ${msg.id}:`, e);
                 msg.status = 'error';
-                UI.toast(`Error enviando mensaje. Reintentando...`, 'error');
+                UI.toast(`Error enviando mensaje: ${e.message}`, 'error');
+                // No eliminamos el mensaje de la cola para permitir reintentos o visualización de error
             }
         }
     },
