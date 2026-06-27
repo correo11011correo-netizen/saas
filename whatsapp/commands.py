@@ -510,4 +510,67 @@ class WhatsappCommandHandler:
             return ServiceResponse.error_res(f"Navigation error: {str(e)}", "NAV_ERROR")
 
 
-whatsapp_commands = WhatsappCommandHandler()
+
+class BotManagerCommandHandler:
+    """
+    Gestión de perfiles de bots especializados.
+    """
+    @command(
+        name="bot.create",
+        description="Creates a new specialized bot profile.",
+        params_model={"name": "string", "account_alias": "string"},
+    )
+    def create_bot(
+        self, session: Session, context: TenantContext, name: str, account_alias: str
+    ) -> ServiceResponse:
+        try:
+            session.execute(
+                text(
+                    "INSERT INTO bot_profiles (tenant_id, name, account_alias) VALUES (:tid, :name, :alias)"
+                ),
+                {"tid": context.tenant_id, "name": name, "alias": account_alias},
+            )
+            session.commit()
+            return ServiceResponse.success_res(message="Bot profile created successfully.")
+        except Exception as e:
+            session.rollback()
+            return ServiceResponse.error_res(f"Error creating bot: {str(e)}", "BOT_CREATE_ERROR")
+
+    @command(
+        name="bot.list",
+        description="Lists all bot profiles for the tenant.",
+        params_model={},
+    )
+    def list_bots(self, session: Session, context: TenantContext) -> ServiceResponse:
+        try:
+            result = session.execute(
+                text("SELECT id, name, account_alias, capabilities, is_active FROM bot_profiles WHERE tenant_id = :tid"),
+                {"tid": context.tenant_id}
+            ).mappings().all()
+            return ServiceResponse.success_res(data=[dict(row) for row in result], message="Bot profiles listed.")
+        except Exception as e:
+            return ServiceResponse.error_res(f"Error listing bots: {str(e)}", "BOT_LIST_ERROR")
+
+    @command(
+        name="bot.update_capabilities",
+        description="Updates bot capabilities (permissions).",
+        params_model={"account_alias": "string", "capabilities": "dict"},
+    )
+    def update_capabilities(
+        self, session: Session, context: TenantContext, account_alias: str, capabilities: Dict[str, bool]
+    ) -> ServiceResponse:
+        try:
+            import json
+            session.execute(
+                text(
+                    "UPDATE bot_profiles SET capabilities = :caps WHERE tenant_id = :tid AND account_alias = :alias"
+                ),
+                {"caps": json.dumps(capabilities), "tid": context.tenant_id, "alias": account_alias},
+            )
+            session.commit()
+            return ServiceResponse.success_res(message="Bot capabilities updated.")
+        except Exception as e:
+            session.rollback()
+            return ServiceResponse.error_res(f"Error updating capabilities: {str(e)}", "BOT_UPDATE_ERROR")
+
+bot_manager_commands = BotManagerCommandHandler()

@@ -89,6 +89,23 @@ def init_db():
             """,
             )
 
+            # 2.2 Create Bot Profiles Table
+            run_query(
+                cur,
+                """
+                CREATE TABLE IF NOT EXISTS bot_profiles (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    tenant_id UUID REFERENCES tenants(id),
+                    name VARCHAR(100) NOT NULL,
+                    account_alias VARCHAR(100) NOT NULL,
+                    capabilities JSONB DEFAULT '{"can_sell": false, "can_manage_stock": false, "can_process_payments": false}',
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (tenant_id, account_alias)
+                );
+            """,
+            )
+
             # 3. Update Users Table
             # Create table if not exists to avoid errors during init
             run_query(
