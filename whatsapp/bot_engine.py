@@ -54,12 +54,13 @@ class BotEngine:
             {"phone": sender, "msg": text_message, "tid": tenant_id, "alias": account_alias},
         )
 
-        # 2. GESTIONAR SESIÓN PRIMERO (Insertar/Actualizar con el alias correcto)
+        # 2. GESTIONAR SESIÓN
+        # Verificamos si es la primera vez que el usuario escribe en esta sesión/tenant
         msg_count = session.execute(
             text(
-                "SELECT count(*) FROM whatsapp_conversations WHERE phone_number = :phone AND tenant_id = :tid AND account_alias = :alias"
+                "SELECT count(*) FROM whatsapp_conversations WHERE phone_number = :phone AND tenant_id = :tid"
             ),
-            {"phone": sender, "tid": tenant_id, "alias": account_alias},
+            {"phone": sender, "tid": tenant_id},
         ).scalar()
 
         is_first_message = msg_count <= 1
@@ -72,140 +73,118 @@ class BotEngine:
                 ON CONFLICT (tenant_id, phone_number)
                 DO UPDATE SET is_bot_active = CASE WHEN :first THEN TRUE ELSE whatsapp_sessions.is_bot_active END,
                               current_node_id = CASE WHEN :first THEN NULL ELSE whatsapp_sessions.current_node_id END,
-                              account_alias = EXCLUDED.account_alias -- Asegurar que el alias siempre esté actualizado
+                              account_alias = EXCLUDED.account_alias
                 """
             ),
             {"tid": tenant_id, "phone": sender, "alias": account_alias, "first": is_first_message},
         )
         session.commit()
-        
+
         session_data = (
             session.execute(
                 text(
                     "SELECT current_node_id, account_alias, is_bot_active FROM whatsapp_sessions "
-                    "WHERE phone_number = :phone AND tenant_id = :tid AND account_alias = :alias"
+                    "WHERE phone_number = :phone AND tenant_id = :tid"
                 ),
-                {"phone": sender, "tid": tenant_id, "alias": account_alias},
+                {"phone": sender, "tid": tenant_id},
             )
             .mappings()
             .first()
         )
 
-
         if not session_data:
-            logger.error(f"No se pudo recuperar la sesión para {sender} con alias {account_alias}")
+            logger.error(f"No se pudo recuperar la sesión para {sender}")
             return
 
         current_node_id = session_data["current_node_id"]
         is_bot_active = session_data.get("is_bot_active", True)
 
         if not is_bot_active:
-            logger.info(f"Bot desactivado para el usuario {sender} y alias {account_alias}. Ignorando mensaje.")
             return
 
-        # 3. CARGAR CONFIGURACIÓN DEL BOT (Ahora con el alias correcto)
         settings = self._get_settings(session, tenant_id, account_alias)
 
-        # SECTOR: Derivación (Si el bot está globalmente desactivado)
         if not settings.get("is_global_active", True):
-            logger.info(
-                f"Bot {account_alias} globalmente inactivo para {tenant_id}. Enviando mensaje de derivación."
-            )
-            self._send_immediate_response(
-                session, tenant_id, sender, settings["handoff_message"], account_alias
-            )
+            self._send_immediate_response(session, tenant_id, sender, settings["handoff_message"], account_alias)
             return
 
-        # 4. DETERMINAR RESPUESTA (Sectores vs Nodos)
+        # --- LÓGICA DE TRANSICIÓN MEJORADA ---
 
-        # SECTOR: Bienvenida (Si es primer mensaje o no hay nodo asignado)
-        if is_first_message or not current_node_id:
-            logger.info(
-                f"Activando flujo de Bienvenida para {sender} en bot {account_alias} (FirstMsg: {is_first_message})"
-            )
-            welcome_msg = settings["welcome_message"]
+        # Caso A: Primer mensaje -> Bienvenida + Posicionamiento en Nodo Inicio
+        if is_first_message:
+            logger.info(f"Flujo de Bienvenida para {sender}")
 
-            # Buscamos el nodo 'inicio' para dejar al usuario posicionado en el menú
-            node = (
+            node_inicio = (
                 session.execute(
-                    text(
-                        "SELECT id FROM bot_nodes WHERE name = 'inicio' AND tenant_id = :tid AND account_alias = :alias"
-                    ),
+                    text("SELECT id, prompt FROM bot_nodes WHERE name = 'inicio' AND tenant_id = :tid AND account_alias = :alias"),
                     {"tid": tenant_id, "alias": account_alias},
-                )
-                .mappings()
-                .first()
+                ).mappings().first()
             )
 
-            # Respondemos con la bienvenida personalizada
-            self._send_immediate_response(
-                session, tenant_id, sender, welcome_msg, account_alias
-            )
+            # Enviamos la bienvenida + el menú del nodo inicio inmediatamente
+            msg_final = settings["welcome_message"]
+            if node_inicio:
+                msg_final += f"\n\n{node_inicio['prompt']}"
 
-            if node:
+            self._send_immediate_response(session, tenant_id, sender, msg_final, account_alias)
+
+            if node_inicio:
                 session.execute(
-                    text(
-                        "UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid AND account_alias = :alias"
-                    ),
-                    {"nid": node["id"], "phone": sender, "tid": tenant_id, "alias": account_alias},
+                    text("UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid"),
+                    {"nid": node_inicio["id"], "phone": sender, "tid": tenant_id},
                 )
                 session.commit()
             return
 
-        # SECTOR: Interacción (Nodos y Opciones)
-        logger.info(f"Procesando interacción en nodo {current_node_id} para bot {account_alias}")
-        option = (
-            session.execute(
-                text(
-                    "SELECT next_node_id, action FROM bot_options "
-                    "WHERE node_id = :nid AND label = :label AND tenant_id = :tid AND account_alias = :alias"
-                ),
-                {"nid": current_node_id, "label": text_message, "tid": tenant_id, "alias": account_alias},
-            )
-            .mappings()
-            .first()
-        )
-
-        if option and option["next_node_id"]:
-            node = (
+        # Caso B: Interacción con Menús (Nodos)
+        if current_node_id:
+            logger.info(f"Procesando opción '{text_message}' en nodo {current_node_id}")
+            option = (
                 session.execute(
                     text(
-                        "SELECT id, prompt FROM bot_nodes WHERE id = :nid AND tenant_id = :tid AND account_alias = :alias"
+                        "SELECT next_node_id, action FROM bot_options "
+                        "WHERE node_id = :nid AND (label = :label OR label = :label_num) AND tenant_id = :tid AND account_alias = :alias"
                     ),
-                    {"nid": option["next_node_id"], "tid": tenant_id, "alias": account_alias},
-                )
-                .mappings()
-                .first()
+                    {"nid": current_node_id, "label": text_message, "label_num": text_message.strip(), "tid": tenant_id, "alias": account_alias},
+                ).mappings().first()
             )
-            if node:
-                self._send_immediate_response(
-                    session, tenant_id, sender, node["prompt"], account_alias
-                )
-                session.execute(
-                    text(
-                        "UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid AND account_alias = :alias"
-                    ),
-                    {"nid": node["id"], "phone": sender, "tid": tenant_id, "alias": account_alias},
-                )
-                session.commit()
-                return
 
-        # Fallback: Si no entiende la opción, repetimos el nodo actual
+            if option:
+                # Si la opción tiene un nodo siguiente, navegamos
+                if option["next_node_id"]:
+                    node = (
+                        session.execute(
+                            text("SELECT id, prompt FROM bot_nodes WHERE id = :nid AND tenant_id = :tid AND account_alias = :alias"),
+                            {"nid": option["next_node_id"], "tid": tenant_id, "alias": account_alias},
+                        ).mappings().first()
+                    )
+                    if node:
+                        self._send_immediate_response(session, tenant_id, sender, node["prompt"], account_alias)
+                        session.execute(
+                            text("UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid"),
+                            {"nid": node["id"], "phone": sender, "tid": tenant_id},
+                        )
+                        session.commit()
+                        return
+
+                # Si la opción tiene una ACCIÓN (ej: 'list_products'), el dispatcher debería manejarlo
+                # Aquí podríamos expandir para que 'action' ejecute comandos del sistema.
+                if option["action"] == "list_products":
+                    # Este es un trigger especial para el bot de ventas
+                    # Simulamos la respuesta del comando de stock
+                    self._send_immediate_response(session, tenant_id, sender, "Consultando stock... 📦", account_alias)
+                    # (La lógica de ejecución de comandos se integraría aquí o vía dispatcher)
+                    return
+
+        # Fallback: Repetir menú actual
         node = (
             session.execute(
-                text(
-                    "SELECT id, prompt FROM bot_nodes WHERE id = :nid AND tenant_id = :tid AND account_alias = :alias"
-                ),
+                text("SELECT prompt FROM bot_nodes WHERE id = :nid AND tenant_id = :tid AND account_alias = :alias"),
                 {"nid": current_node_id, "tid": tenant_id, "alias": account_alias},
-            )
-            .mappings()
-            .first()
+            ).mappings().first()
         )
         if node:
-            self._send_immediate_response(
-                session, tenant_id, sender, node["prompt"], account_alias
-            )
-
+            self._send_immediate_response(session, tenant_id, sender, node["prompt"], account_alias)
     def _send_immediate_response(
         self, session, tenant_id, sender, body, alias: str
     ):
