@@ -10,7 +10,6 @@ logger = logging.getLogger("OmniCore.BotEngine")
 
 
 class BotEngine:
-class BotEngine:
     def _get_settings(self, session: Session, tenant_id: str, account_alias: str) -> Dict[str, Any]:
         """
         Obtiene la configuración del bot específico para un alias.
