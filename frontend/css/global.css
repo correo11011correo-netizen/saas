@@ -310,11 +310,12 @@ input:checked + .slider:before { transform: translateX(20px); }
     position: sticky;
     bottom: 0;
     background: white;
-    padding: 10px;
+    padding: var(--spacing-sm) var(--spacing-md);
     border-top: 1px solid var(--color-border);
     display: flex;
     gap: 5px;
     z-index: 10;
+    margin-top: auto;
 }
 
 @media (min-width: 768px) {
