@@ -73,15 +73,6 @@ class BotEngine:
                 DO UPDATE SET is_bot_active = CASE WHEN :first THEN TRUE ELSE whatsapp_sessions.is_bot_active END,
                               current_node_id = CASE WHEN :first THEN NULL ELSE whatsapp_sessions.current_node_id END,
                               account_alias = EXCLUDED.account_alias -- Asegurar que el alias siempre esté actualizado
-        session.execute(
-            text(
-                """
-                INSERT INTO whatsapp_sessions (tenant_id, phone_number, account_alias, is_bot_active, current_node_id)
-                VALUES (:tid, :phone, :alias, TRUE, NULL)
-                ON CONFLICT (tenant_id, phone_number)
-                DO UPDATE SET is_bot_active = CASE WHEN :first THEN TRUE ELSE whatsapp_sessions.is_bot_active END,
-                              current_node_id = CASE WHEN :first THEN NULL ELSE whatsapp_sessions.current_node_id END,
-                              account_alias = EXCLUDED.account_alias -- Asegurar que el alias siempre esté actualizado
                 """
             ),
             {"tid": tenant_id, "phone": sender, "alias": account_alias, "first": is_first_message},
