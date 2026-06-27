@@ -453,10 +453,7 @@ window.Whatsapp = {
         } catch (e) {
             UI.toast(e.message, 'error');
         }
-    }
-};
-
-window.Whatsapp = Whatsapp;
+    },
 
     async renderBotManager() {
         return `
@@ -519,4 +516,7 @@ window.Whatsapp = Whatsapp;
         } catch (e) {
             UI.toast(e.message, 'error');
         }
-    },
+    }
+};
+
+window.Whatsapp = Whatsapp;
