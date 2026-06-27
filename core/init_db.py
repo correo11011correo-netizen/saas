@@ -299,7 +299,7 @@ def init_db():
                 """
                 DO $$
                 BEGIN
-                    IF NOT EXISTS (SELECT 1 FROM pg_//constraint WHERE conname = 'unique_bot_settings_per_profile') THEN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'unique_bot_settings_per_profile') THEN
                         ALTER TABLE bot_settings ADD CONSTRAINT unique_bot_settings_per_profile UNIQUE (tenant_id, bot_profile_id);
                     END IF;
                 END $$;
