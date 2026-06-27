@@ -275,26 +275,46 @@ h1, h2, h3 { font-weight: 700; color: var(--color-text-main); }
     to { transform: translateY(0); opacity: 1; }
 }
 
-/* Menu Panel (Bottom Sheet Style) */
-.menu-panel {
-    position: fixed;
-    bottom: -100%;
-    left: 0;
-    width: 100%;
-    height: auto;
-    max-height: 70vh;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(20px);
-    z-index: 1001;
-    transition: bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 -5px 15px rgba(0,0,0,0.05);
-    display: flex;
-    flex-direction: column;
-    padding: var(--spacing-md) var(--spacing-lg) var(--spacing-lg) var(--spacing-lg);
-    overflow-y: auto;
+/* UI Switch Toggle */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
 }
-.menu-panel.open {
-    bottom: 70px;
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 24px;
+}
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+input:checked + .slider { background-color: var(--color-primary); }
+input:checked + .slider:before { transform: translateX(20px); }
+
+/* Chat Input Fix */
+.chat-input-area {
+    position: sticky;
+    bottom: 0;
+    background: white;
+    padding: 10px;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    gap: 5px;
+    z-index: 10;
 }
 
 @media (min-width: 768px) {

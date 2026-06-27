@@ -156,15 +156,15 @@ window.Whatsapp = {
                         <div style="padding: 10px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center;">
                             <button class="btn" onclick="Whatsapp.render('messages')">← Volver</button>
                             <strong>${phoneNumber}</strong>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="font-size: 12px;">Bot:</span>
+                            <label class="switch">
                                 <input type="checkbox" id="bot-status-check" ${is_bot_active ? 'checked' : ''} onchange="Whatsapp.toggleBotStatus('${phoneNumber}', this.checked)">
-                            </div>
+                                <span class="slider"></span>
+                            </label>
                         </div>
                         <div id="messages-container" style="flex: 1; overflow-y: auto; padding: 10px; background: var(--color-bg);">
                         </div>
-                        <div style="padding: 10px; border-top: 1px solid var(--color-border); display: flex; gap: 5px;">
-                            <input type="text" id="msg-input" class="input-field" placeholder="Escribe un mensaje..." style="margin-bottom: 0;">
+                        <div class="chat-input-area">
+                            <input type="text" id="msg-input" class="input-field" placeholder="Escribe un mensaje..." style="margin-bottom: 0;" onkeypress="if(event.key === 'Enter') Whatsapp.sendMessage('${phoneNumber}')">
                             <button class="btn btn-primary" onclick="Whatsapp.sendMessage('${phoneNumber}')">Enviar</button>
                         </div>
                     </div>
