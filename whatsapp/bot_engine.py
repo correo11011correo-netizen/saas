@@ -10,15 +10,15 @@ logger = logging.getLogger("OmniCore.BotEngine")
 
 
 class BotEngine:
-    def _get_settings(self, session: Session, tenant_id: str) -> Dict[str, Any]:
+class BotEngine:
+    def _get_settings(self, session: Session, tenant_id: str, account_alias: str) -> Dict[str, Any]:
         """
-        Obtiene la configuración del bot. Si no existe en la base de datos,
-        devuelve valores predeterminados para garantizar la operatividad.
+        Obtiene la configuración del bot específico para un alias.
         """
         settings = (
             session.execute(
-                text("SELECT * FROM bot_settings WHERE tenant_id = :tid"),
-                {"tid": tenant_id},
+                text("SELECT * FROM bot_settings WHERE tenant_id = :tid AND account_alias = :alias"),
+                {"tid": tenant_id, "alias": account_alias},
             )
             .mappings()
             .first()
@@ -27,7 +27,7 @@ class BotEngine:
         if settings:
             return dict(settings)
 
-        # FALLBACKS: Valores predeterminados integrados para evitar errores de 'bot no responde'
+        # FALLBACKS: Valores predeterminados integrados
         return {
             "bot_name": "Asistente Virtual",
             "welcome_message": "¡Hola! Bienvenido. 🤖 Soy tu asistente virtual. ¿En qué puedo ayudarte hoy?",
@@ -55,21 +55,7 @@ class BotEngine:
             {"phone": sender, "msg": text_message, "tid": tenant_id},
         )
 
-        # 2. CARGAR CONFIGURACIÓN DEL BOT (Con Fallback integrado)
-        settings = self._get_settings(session, tenant_id)
-
-        # SECTOR: Derivación (Si el bot está globalmente desactivado)
-        if not settings.get("is_global_active", True):
-            logger.info(
-                f"Bot globalmente inactivo para {tenant_id}. Enviando mensaje de derivación."
-            )
-            self._send_immediate_response(
-                session, tenant_id, sender, settings["handoff_message"]
-            )
-            return
-
-        # 3. DETECTAR SI ES EL PRIMER MENSAJE (Para activar Bot y Bienvenida)
-        # Contamos mensajes previos excluyendo el que acabamos de insertar
+        # 2. GESTIONAR SESIÓN PRIMERO (Para obtener el account_alias)
         msg_count = session.execute(
             text(
                 "SELECT count(*) FROM whatsapp_conversations WHERE phone_number = :phone AND tenant_id = :tid"
@@ -79,7 +65,6 @@ class BotEngine:
 
         is_first_message = msg_count <= 1
 
-        # GESTIONAR SESIÓN: Crear o Actualizar
         session.execute(
             text(
                 """
@@ -93,6 +78,7 @@ class BotEngine:
             {"tid": tenant_id, "phone": sender, "first": is_first_message},
         )
         session.commit()
+        
         session_data = (
             session.execute(
                 text(
@@ -105,19 +91,37 @@ class BotEngine:
             .first()
         )
 
-        if not session_data or not session_data.get("is_bot_active", True):
-            logger.info(f"Bot desactivado para el usuario {sender}. Ignorando mensaje.")
+        if not session_data:
+            logger.error(f"No se pudo recuperar la sesión para {sender}")
             return
 
         account_alias = session_data["account_alias"] or "Principal"
         current_node_id = session_data["current_node_id"]
+        is_bot_active = session_data.get("is_bot_active", True)
+
+        if not is_bot_active:
+            logger.info(f"Bot desactivado para el usuario {sender}. Ignorando mensaje.")
+            return
+
+        # 3. CARGAR CONFIGURACIÓN DEL BOT (Ahora con el alias correcto)
+        settings = self._get_settings(session, tenant_id, account_alias)
+
+        # SECTOR: Derivación (Si el bot está globalmente desactivado)
+        if not settings.get("is_global_active", True):
+            logger.info(
+                f"Bot {account_alias} globalmente inactivo para {tenant_id}. Enviando mensaje de derivación."
+            )
+            self._send_immediate_response(
+                session, tenant_id, sender, settings["handoff_message"], account_alias
+            )
+            return
 
         # 4. DETERMINAR RESPUESTA (Sectores vs Nodos)
 
         # SECTOR: Bienvenida (Si es primer mensaje o no hay nodo asignado)
         if is_first_message or not current_node_id:
             logger.info(
-                f"Activando flujo de Bienvenida para {sender} (FirstMsg: {is_first_message})"
+                f"Activando flujo de Bienvenida para {sender} en bot {account_alias} (FirstMsg: {is_first_message})"
             )
             welcome_msg = settings["welcome_message"]
 
@@ -125,9 +129,9 @@ class BotEngine:
             node = (
                 session.execute(
                     text(
-                        "SELECT id FROM bot_nodes WHERE name = 'inicio' AND tenant_id = :tid"
+                        "SELECT id FROM bot_nodes WHERE name = 'inicio' AND tenant_id = :tid AND account_alias = :alias"
                     ),
-                    {"tid": tenant_id},
+                    {"tid": tenant_id, "alias": account_alias},
                 )
                 .mappings()
                 .first()
@@ -149,14 +153,14 @@ class BotEngine:
             return
 
         # SECTOR: Interacción (Nodos y Opciones)
-        logger.info(f"Procesando interacción en nodo {current_node_id}")
+        logger.info(f"Procesando interacción en nodo {current_node_id} para bot {account_alias}")
         option = (
             session.execute(
                 text(
                     "SELECT next_node_id, action FROM bot_options "
-                    "WHERE node_id = :nid AND label = :label AND tenant_id = :tid"
+                    "WHERE node_id = :nid AND label = :label AND tenant_id = :tid AND account_alias = :alias"
                 ),
-                {"nid": current_node_id, "label": text_message, "tid": tenant_id},
+                {"nid": current_node_id, "label": text_message, "tid": tenant_id, "alias": account_alias},
             )
             .mappings()
             .first()
@@ -166,9 +170,9 @@ class BotEngine:
             node = (
                 session.execute(
                     text(
-                        "SELECT id, prompt FROM bot_nodes WHERE id = :nid AND tenant_id = :tid"
+                        "SELECT id, prompt FROM bot_nodes WHERE id = :nid AND tenant_id = :tid AND account_alias = :alias"
                     ),
-                    {"nid": option["next_node_id"], "tid": tenant_id},
+                    {"nid": option["next_node_id"], "tid": tenant_id, "alias": account_alias},
                 )
                 .mappings()
                 .first()
@@ -190,9 +194,9 @@ class BotEngine:
         node = (
             session.execute(
                 text(
-                    "SELECT id, prompt FROM bot_nodes WHERE id = :nid AND tenant_id = :tid"
+                    "SELECT id, prompt FROM bot_nodes WHERE id = :nid AND tenant_id = :tid AND account_alias = :alias"
                 ),
-                {"nid": current_node_id, "tid": tenant_id},
+                {"nid": current_node_id, "tid": tenant_id, "alias": account_alias},
             )
             .mappings()
             .first()

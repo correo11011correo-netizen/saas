@@ -151,9 +151,38 @@ class CredentialsCommandHandler:
                     "tid": context.tenant_id,
                 },
             )
+
+            # --- AUTO-CONFIGURACIÓN DE BOT DE WHATSAPP ---
+            if service == 'whatsapp':
+                # 1. Asegurar configuración básica del Bot
+                session.execute(
+                    text(
+                        """
+                        INSERT INTO bot_settings (tenant_id, account_alias, bot_name, welcome_message, farewell_message, handoff_message, support_email, is_global_active)
+                        VALUES (:tid, :alias, 'Asistente Virtual', '¡Hola! Bienvenido. 🤖 Soy tu asistente virtual. ¿En qué puedo ayudarte hoy?', 
+                                'Gracias por contactarnos. ¡Que tengas un gran día! 👋', 'He desactivado el bot. Un agente humano se pondrá en contacto contigo en breve. 👨‍💻', 
+                                'soporte@negocio.com', TRUE)
+                        ON CONFLICT (tenant_id, account_alias) DO NOTHING
+                        """
+                    ),
+                    {"tid": context.tenant_id, "alias": account_alias},
+                )
+
+                # 2. Asegurar Nodo de Inicio básico
+                session.execute(
+                    text(
+                        """
+                        INSERT INTO bot_nodes (tenant_id, account_alias, name, prompt)
+                        VALUES (:tid, :alias, 'inicio', 'Hola, ¿en qué puedo ayudarte?')
+                        ON CONFLICT (tenant_id, account_alias, name) DO NOTHING
+                        """
+                    ),
+                    {"tid": context.tenant_id, "alias": account_alias},
+                )
+
             session.commit()
             return ServiceResponse.success_res(
-                message=f"Credentials for {service} ({account_alias}) updated successfully."
+                message=f"Credentials for {service} ({account_alias}) updated successfully and bot configured."
             )
         except Exception as e:
             session.rollback()

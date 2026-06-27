@@ -184,10 +184,12 @@ def init_db():
                 ],
                 "bot_nodes": [
                     "name VARCHAR(100)",
+                    "account_alias VARCHAR(100)",
                     "prompt TEXT",
                 ],
                 "bot_options": [
                     "node_id UUID",
+                    "account_alias VARCHAR(100)",
                     "label VARCHAR(100)",
                     "next_node_id UUID",
                     "action VARCHAR(100)",
@@ -198,6 +200,7 @@ def init_db():
                     "message TEXT",
                 ],
                 "bot_settings": [
+                    "account_alias VARCHAR(100)",
                     "bot_name VARCHAR(100)",
                     "welcome_message TEXT",
                     "farewell_message TEXT",
@@ -264,6 +267,32 @@ def init_db():
                 BEGIN
                     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'unique_whatsapp_session_per_tenant') THEN
                         ALTER TABLE whatsapp_sessions ADD CONSTRAINT unique_whatsapp_session_per_tenant UNIQUE (tenant_id, phone_number);
+                    END IF;
+                END $$;
+                """,
+            )
+
+            # Uniqueness for bot_settings: Unique tenant + alias
+            run_query(
+                cur,
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'unique_bot_settings_per_alias') THEN
+                        ALTER TABLE bot_settings ADD CONSTRAINT unique_bot_settings_per_alias UNIQUE (tenant_id, account_alias);
+                    END IF;
+                END $$;
+                """,
+            )
+
+            # Uniqueness for bot_nodes: Unique tenant + alias + name
+            run_query(
+                cur,
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'unique_bot_node_per_alias') THEN
+                        ALTER TABLE bot_nodes ADD CONSTRAINT unique_bot_node_per_alias UNIQUE (tenant_id, account_alias, name);
                     END IF;
                 END $$;
                 """,
