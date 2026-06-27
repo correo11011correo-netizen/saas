@@ -37,29 +37,29 @@ class BotEngine:
         }
 
     def process_message(
-        self, session: Session, tenant_id: str, sender: str, text_message: str
+        self, session: Session, tenant_id: str, sender: str, text_message: str, account_alias: str
     ):
         """
         Procesa el mensaje recibido integrando la arquitectura de Sectores:
         Configuración Global -> Bienvenida -> Menú Interactivo.
         """
-        logger.info(f"BotEngine recibiendo mensaje de {sender}: {text_message}")
+        logger.info(f"BotEngine recibiendo mensaje de {sender} para alias {account_alias}: {text_message}")
 
         # 1. REGISTRAR MENSAJE ENTRANTE
         session.execute(
             text(
-                "INSERT INTO whatsapp_conversations (phone_number, sender_type, message, message_type, tenant_id) "
-                "VALUES (:phone, 'user', :msg, 'text', :tid)"
+                "INSERT INTO whatsapp_conversations (phone_number, sender_type, message, message_type, tenant_id, account_alias) "
+                "VALUES (:phone, 'user', :msg, 'text', :tid, :alias)"
             ),
-            {"phone": sender, "msg": text_message, "tid": tenant_id},
+            {"phone": sender, "msg": text_message, "tid": tenant_id, "alias": account_alias},
         )
 
-        # 2. GESTIONAR SESIÓN PRIMERO (Para obtener el account_alias)
+        # 2. GESTIONAR SESIÓN PRIMERO (Insertar/Actualizar con el alias correcto)
         msg_count = session.execute(
             text(
-                "SELECT count(*) FROM whatsapp_conversations WHERE phone_number = :phone AND tenant_id = :tid"
+                "SELECT count(*) FROM whatsapp_conversations WHERE phone_number = :phone AND tenant_id = :tid AND account_alias = :alias"
             ),
-            {"phone": sender, "tid": tenant_id},
+            {"phone": sender, "tid": tenant_id, "alias": account_alias},
         ).scalar()
 
         is_first_message = msg_count <= 1
@@ -68,13 +68,14 @@ class BotEngine:
             text(
                 """
                 INSERT INTO whatsapp_sessions (tenant_id, phone_number, account_alias, is_bot_active, current_node_id)
-                VALUES (:tid, :phone, 'Principal', TRUE, NULL)
+                VALUES (:tid, :phone, :alias, TRUE, NULL)
                 ON CONFLICT (tenant_id, phone_number)
                 DO UPDATE SET is_bot_active = CASE WHEN :first THEN TRUE ELSE whatsapp_sessions.is_bot_active END,
-                              current_node_id = CASE WHEN :first THEN NULL ELSE whatsapp_sessions.current_node_id END
+                              current_node_id = CASE WHEN :first THEN NULL ELSE whatsapp_sessions.current_node_id END,
+                              account_alias = EXCLUDED.account_alias -- Asegurar que el alias siempre esté actualizado
                 """
             ),
-            {"tid": tenant_id, "phone": sender, "first": is_first_message},
+            {"tid": tenant_id, "phone": sender, "alias": account_alias, "first": is_first_message},
         )
         session.commit()
         
@@ -82,24 +83,23 @@ class BotEngine:
             session.execute(
                 text(
                     "SELECT current_node_id, account_alias, is_bot_active FROM whatsapp_sessions "
-                    "WHERE phone_number = :phone AND tenant_id = :tid"
+                    "WHERE phone_number = :phone AND tenant_id = :tid AND account_alias = :alias"
                 ),
-                {"phone": sender, "tid": tenant_id},
+                {"phone": sender, "tid": tenant_id, "alias": account_alias},
             )
             .mappings()
             .first()
         )
 
         if not session_data:
-            logger.error(f"No se pudo recuperar la sesión para {sender}")
+            logger.error(f"No se pudo recuperar la sesión para {sender} con alias {account_alias}")
             return
 
-        account_alias = session_data["account_alias"] or "Principal"
         current_node_id = session_data["current_node_id"]
         is_bot_active = session_data.get("is_bot_active", True)
 
         if not is_bot_active:
-            logger.info(f"Bot desactivado para el usuario {sender}. Ignorando mensaje.")
+            logger.info(f"Bot desactivado para el usuario {sender} y alias {account_alias}. Ignorando mensaje.")
             return
 
         # 3. CARGAR CONFIGURACIÓN DEL BOT (Ahora con el alias correcto)
@@ -144,9 +144,9 @@ class BotEngine:
             if node:
                 session.execute(
                     text(
-                        "UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid"
+                        "UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid AND account_alias = :alias"
                     ),
-                    {"nid": node["id"], "phone": sender, "tid": tenant_id},
+                    {"nid": node["id"], "phone": sender, "tid": tenant_id, "alias": account_alias},
                 )
                 session.commit()
             return
@@ -182,9 +182,9 @@ class BotEngine:
                 )
                 session.execute(
                     text(
-                        "UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid"
+                        "UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid AND account_alias = :alias"
                     ),
-                    {"nid": node["id"], "phone": sender, "tid": tenant_id},
+                    {"nid": node["id"], "phone": sender, "tid": tenant_id, "alias": account_alias},
                 )
                 session.commit()
                 return
@@ -206,7 +206,7 @@ class BotEngine:
             )
 
     def _send_immediate_response(
-        self, session, tenant_id, sender, body, alias="Principal"
+        self, session, tenant_id, sender, body, alias: str # Aseguramos que el alias se pase
     ):
         """Helper para enviar mensajes vía dispatcher rápidamente."""
         tenant_uuid = (

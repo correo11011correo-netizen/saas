@@ -136,9 +136,7 @@ async def process_webhook_event(
     with session_factory() as session:
         from whatsapp.bot_engine import BotEngine
 
-        # Event Mapping
         if event_type == "whatsapp":
-            # Meta Payload Structure: entry[0].changes[0].value.messages[0]
             try:
                 entry = payload.get("entry", [{}])[0]
                 changes = entry.get("changes", [{}])[0]
@@ -151,8 +149,32 @@ async def process_webhook_event(
 
                 msg_data = messages[0]
                 sender = msg_data.get("from")
+                
+                # Extraer phone_number_id del payload de Meta
+                phone_number_id_from_meta = value.get("metadata", {}).get("phone_number_id")
+                if not phone_number_id_from_meta:
+                    logger.error(f"No se encontró phone_number_id en el payload de Meta: {payload}")
+                    return
+                
+                # Buscar el account_alias asociado a este phone_number_id
+                cred = (
+                    session.execute(
+                        text(
+                            "SELECT account_alias FROM credentials WHERE service_name = 'whatsapp' AND tenant_id = :tid AND metadata->>'phone_number_id' = :phone_id"
+                        ),
+                        {"tid": tenant_id, "phone_id": phone_number_id_from_meta},
+                    )
+                    .mappings()
+                    .first()
+                )
 
-                # Extract text message body
+                if not cred:
+                    logger.error(f"No se encontró credencial de WhatsApp con phone_number_id {phone_number_id_from_meta} para tenant {tenant_id}")
+                    return
+                
+                account_alias = cred["account_alias"]
+                logger.info(f"Mensaje de WhatsApp para alias: {account_alias}")
+
                 msg_type = msg_data.get("type", "text")
                 if msg_type == "text":
                     message = msg_data.get("text", {}).get("body")
@@ -165,13 +187,12 @@ async def process_webhook_event(
                     )
                     return
 
-                # Use BotEngine
                 bot = BotEngine()
-                bot.process_message(session, tenant_id, sender, message)
+                bot.process_message(session, tenant_id, sender, message, account_alias) # Pasamos el alias
             except (IndexError, KeyError, TypeError) as e:
                 logger.error(f"Error parsing Meta payload: {e}")
                 logger.error(f"Payload: {payload}")
                 return
         else:
-            logger.warning(f"Unhandled event type: {secret}")
+            logger.warning(f"Unhandled event type: {event_type}") # Cambiado 'secret' a 'event_type'
             return
