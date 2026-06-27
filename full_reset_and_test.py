@@ -3,11 +3,12 @@ from psycopg2 import sql
 import logging
 import requests
 import json
+import os
 from sqlalchemy import create_engine, text
 
 # --- CONFIGURACIÓN ---
 DB_URL = "postgresql://postgres:TFralZyHIJnjyZrNMtoDqqtUlPTsttvT@thomas.proxy.rlwy.net:24031/railway"
-API_URL = "https://saas-production-2dd6.up.railway.app"
+API_URL = os.getenv("BASE_URL", "https://saas-production-2dd6.up.railway.app")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("FullReset")

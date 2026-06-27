@@ -2,8 +2,9 @@ import asyncio
 import aiohttp
 import time
 import random
+import os
 
-BASE_URL = "https://saas-production-2dd6.up.railway.app"
+BASE_URL = os.getenv("BASE_URL", "https://saas-production-2dd6.up.railway.app")
 
 
 async def monitor_tenant_flow(tenant_id):

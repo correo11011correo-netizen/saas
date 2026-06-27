@@ -8,7 +8,9 @@ from core.context import TenantContext
 import os
 
 logger = logging.getLogger("OmniCore.Credentials")
-BASE_URL = os.getenv("BASE_URL", "https://saas-production-2dd6.up.railway.app")
+BASE_URL = os.getenv("BASE_URL")
+if not BASE_URL:
+    raise Exception("BASE_URL environment variable is required for generating webhook URLs")
 
 
 class CredentialsCommandHandler:

@@ -1,8 +1,9 @@
 import requests
 import json
 import uuid
+import os
 
-BASE_URL = "https://saas-production-2dd6.up.railway.app"
+BASE_URL = os.getenv("BASE_URL", "https://saas-production-2dd6.up.railway.app")
 
 
 def audit_real_data():

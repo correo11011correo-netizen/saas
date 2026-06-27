@@ -15,7 +15,6 @@ logger = logging.getLogger("DB_Init")
 def run_query(cursor, query, params=None):
     try:
         cursor.execute(query, params)
-        logger.info(f"Executed: {query[:100]}...")
     except Exception as e:
         logger.error(f"Error executing query: {e}")
         raise e
@@ -26,15 +25,11 @@ def init_db():
     for attempt in range(max_retries):
         conn = None
         try:
-            logger.info(
-                f"Connecting to Railway PostgreSQL... (Attempt {attempt+1}/{max_retries})"
-            )
             conn = psycopg2.connect(DB_URL)
             conn.autocommit = True
             cur = conn.cursor()
 
             # 1. Create Tenants Table
-            logger.info("Ensuring tenants table structure...")
             run_query(
                 cur,
                 """
@@ -64,7 +59,6 @@ def init_db():
             )
 
             # 2. Create Audit Log Table
-            logger.info("Creating audit_log table...")
             run_query(
                 cur,
                 """
@@ -80,7 +74,6 @@ def init_db():
             )
 
             # 2.1 Create Frontend Manifest Table
-            logger.info("Creating frontend_manifest table...")
             run_query(
                 cur,
                 """
@@ -97,7 +90,6 @@ def init_db():
             )
 
             # 3. Update Users Table
-            logger.info("Adapting users table for multi-tenancy...")
             # Create table if not exists to avoid errors during init
             run_query(
                 cur,
@@ -231,8 +223,6 @@ def init_db():
             }
 
             for table, columns in business_schemas.items():
-                logger.info(f"Adapting table {table}...")
-
                 # 1. Create table if not exists with basic ID and tenant_id
                 run_query(
                     cur,
@@ -263,8 +253,6 @@ def init_db():
                 )
 
             # 4. Handle Specific Table Constraints
-            logger.info("Ensuring specific business constraints...")
-
             # Uniqueness for products
             run_query(
                 cur,

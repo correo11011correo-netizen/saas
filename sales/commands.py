@@ -5,7 +5,11 @@ from core.decorators import command
 from core.context import TenantContext
 from sqlalchemy.orm import Session
 import json
+import os
 
+BASE_URL = os.getenv("BASE_URL")
+if not BASE_URL:
+    raise Exception("BASE_URL environment variable is required for Mercado Pago notifications")
 
 class SalesCommandHandler:
     @command(
@@ -51,10 +55,10 @@ class SalesCommandHandler:
             sdk = mercadopago.SDK(cred["api_key"])
             preference_data = {
                 "items": [
-                    {"title": "Venta OmniCore", "quantity": 1, "unit_price": total}
+                    {"title": "Venta OmniCore", "quantity": 1, "unit_price": total},
                 ],
                 "external_reference": str(sale_id),
-                "notification_url": f"https://saas-production-2dd6.up.railway.app/hooks/mp/ipn",
+                "notification_url": f"{BASE_URL}/hooks/mp/ipn",
             }
             preference_response = sdk.preference().create(preference_data)
             payment_link = preference_response["response"]["init_point"]

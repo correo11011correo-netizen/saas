@@ -1,6 +1,7 @@
 import requests
+import os
 
-BASE_URL = "https://saas-production-2dd6.up.railway.app"
+BASE_URL = os.getenv("BASE_URL", "https://saas-production-2dd6.up.railway.app")
 
 
 def main():
