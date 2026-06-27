@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+requests
+PyJWT
+pydantic
+python-dotenv
+mercadopago==3.2.0
