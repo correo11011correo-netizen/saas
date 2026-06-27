@@ -125,6 +125,14 @@ window.Whatsapp = {
     },
 
     async refreshChatMessages(phoneNumber) {
+        // VALIDACIÓN DE ESTADO: Evitar redirecciones fantasma por polling
+        // Solo renderizamos/actualizamos si el usuario está realmente dentro del módulo whatsapp y en la vista de chat
+        if (App.state.activeModule !== 'whatsapp' || App.state.activePanel !== phoneNumber) {
+            // Si el usuario ya no está en este chat, simplemente actualizamos la cola en silencio si es necesario,
+            // pero NO renderizamos la UI del chat.
+            return;
+        }
+
         try {
             const res = await API.execute('whatsapp.get_messages', { phone_number: phoneNumber });
 
