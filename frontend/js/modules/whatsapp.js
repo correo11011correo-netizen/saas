@@ -112,6 +112,11 @@ window.Whatsapp = {
     async openChat(phoneNumber) {
         this.stopPolling();
         this.currentChat = phoneNumber;
+        
+        // IMPORTANTE: Actualizar el estado global antes de refrescar los mensajes
+        // para que la validación en refreshChatMessages no aborte la carga inicial.
+        App.state.activePanel = phoneNumber;
+        
         UI.showLoading();
         try {
             await this.refreshChatMessages(phoneNumber);
