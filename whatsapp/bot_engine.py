@@ -13,8 +13,10 @@ logger = logging.getLogger("OmniCore.BotEngine")
 class BotEngine:
     def _get_bot_profile_for_credential(self, session: Session, tenant_id: str, phone_number_id: str) -> str:
         """
-        Busca el bot_profile_id asociado a la credencial del número de teléfono.
+        Busca el bot_profile_id asociado a la credencial. 
+        Si no hay asignación específica, busca cualquier bot activo del tenant como fallback.
         """
+        # 1. Intento de asignación específica
         result = (
             session.execute(
                 text(
@@ -30,7 +32,24 @@ class BotEngine:
             .mappings()
             .first()
         )
-        return result["bot_profile_id"] if result else None
+        if result:
+            return result["bot_profile_id"]
+
+        # 2. FALLBACK: Buscar cualquier bot activo del tenant para evitar que el bot quede mudo
+        logger.info(f"No hay asignación específica para {phone_number_id}, buscando bot por defecto...")
+        fallback = (
+            session.execute(
+                text("SELECT id FROM bot_profiles WHERE tenant_id = :tid AND is_active = TRUE LIMIT 1"),
+                {"tid": tenant_id},
+            )
+            .mappings()
+            .first()
+        )
+        if fallback:
+            logger.info(f"Usando bot por defecto {fallback['id']} para el número {phone_number_id}")
+            return fallback["id"]
+
+        return None
 
     def _get_settings(self, session: Session, tenant_id: str, bot_profile_id: str) -> Dict[str, Any]:
         """
