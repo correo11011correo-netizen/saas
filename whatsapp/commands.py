@@ -525,9 +525,7 @@ class WhatsappCommandHandler:
                 f"{i+1}. {opt.get('label', 'Sin etiqueta')}"
                 for i, opt in enumerate(options)
             ]
-            full_text = f"{result['prompt']}
-
-{chr(10).join(options_list)}"
+            full_text = f"{result['prompt']}\n\n{chr(10).join(options_list)}"
 
             session.commit()
             return ServiceResponse.success_res(message=full_text)
