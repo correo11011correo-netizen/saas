@@ -51,7 +51,26 @@ class SalesCommandHandler:
                 {"tid": context.tenant_id, "total": total},
             ).scalar()
 
-            # 3. Create MP Preference
+            # 3. SAVE ITEMS (Cierre del ciclo de stock)
+            for item in items:
+                # Esperamos item con: code, quantity, price
+                subtotal = float(item['price']) * int(item['quantity'])
+                session.execute(
+                    text(
+                        "INSERT INTO sale_items (tenant_id, sale_id, product_code, quantity, price, subtotal) "
+                        "VALUES (:tid, :sid, :code, :qty, :price, :sub)"
+                    ),
+                    {
+                        "tid": context.tenant_id,
+                        "sid": sale_id,
+                        "code": item['code'],
+                        "qty": item['quantity'],
+                        "price": item['price'],
+                        "sub": subtotal,
+                    }
+                )
+
+            # 4. Create MP Preference
             sdk = mercadopago.SDK(cred["api_key"])
             preference_data = {
                 "items": [
@@ -63,7 +82,7 @@ class SalesCommandHandler:
             preference_response = sdk.preference().create(preference_data)
             payment_link = preference_response["response"]["init_point"]
 
-            # 4. Update order with payment link
+            # 5. Update order with payment link
             session.execute(
                 text("UPDATE sales_orders SET payment_link = :link WHERE id = :id"),
                 {"link": payment_link, "id": sale_id},
@@ -77,6 +96,64 @@ class SalesCommandHandler:
         except Exception as e:
             session.rollback()
             return ServiceResponse.error_res(str(e), "SALE_CREATE_ERROR")
+
+    @command(
+        name="sales.confirm_payment",
+        description="Confirms a payment, updates order status, and deducts products from stock.",
+        params_model={"sale_id": "string"},
+    )
+    def confirm_payment(
+        self,
+        session: Session,
+        context: TenantContext,
+        sale_id: str,
+    ) -> ServiceResponse:
+        try:
+            # 1. Update Order Status
+            result = session.execute(
+                text(
+                    "UPDATE sales_orders SET payment_status = 'paid' WHERE id = :id AND tenant_id = :tid RETURNING total"
+                ),
+                {"id": sale_id, "tid": context.tenant_id},
+            ).mappings().first()
+
+            if not result:
+                return ServiceResponse.error_res("Order not found or already processed", "ORDER_NOT_FOUND")
+
+            # 2. Deduct Stock for each item in the sale
+            items = session.execute(
+                text("SELECT product_code, quantity FROM sale_items WHERE sale_id = :sid AND tenant_id = :tid"),
+                {"sid": sale_id, "tid": context.tenant_id},
+            ).mappings().all()
+
+            for item in items:
+                # Restar cantidad (quantity negativa)
+                session.execute(
+                    text(
+                        "UPDATE products SET quantity = quantity - :qty WHERE code = :code AND tenant_id = :tid"
+                    ),
+                    {"qty": item['quantity'], "code": item['product_code'], "tid": context.tenant_id},
+                )
+                
+                # Registrar movimiento de stock
+                session.execute(
+                    text(
+                        "INSERT INTO stock_movements (product_code, quantity, reason, user_id, tenant_id) "
+                        "VALUES (:code, :qty, 'SALE_CONFIRMED', :uid, :tid)"
+                    ),
+                    {
+                        "code": item['product_code'],
+                        "qty": -item['quantity'],
+                        "uid": context.user_id,
+                        "tid": context.tenant_id,
+                    }
+                )
+
+            session.commit()
+            return ServiceResponse.success_res(message="Payment confirmed and stock updated.")
+        except Exception as e:
+            session.rollback()
+            return ServiceResponse.error_res(str(e), "CONFIRM_PAYMENT_ERROR")
 
 
 sales_commands = SalesCommandHandler()

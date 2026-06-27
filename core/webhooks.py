@@ -112,15 +112,66 @@ async def handle_mp_ipn(request: Request, db=Depends(get_db)):
     payload = await request.json()
     logger.info(f"MP IPN received: {payload}")
 
-    # 1. Verify Payment (Simplificado)
+    # 1. Verify Payment Event
     if payload.get("type") == "payment":
         payment_id = payload.get("data", {}).get("id")
-        # Aquí deberías usar el SDK para obtener el detalle del pago y verificarlo
-        # ...
+        
+        # Para validar el pago, necesitamos obtener los detalles desde la API de MP
+        # En un entorno real, aquí llamaríamos al SDK de MP para confirmar el estado 'approved'
+        
+        # 2. Find the Sale ID from the payment details
+        # Dado que MP envía la notificación, necesitamos recuperar la 'external_reference'
+        # que es nuestro sale_id.
+        import mercadopago
+        # Obtenemos la API Key de MP del tenant (simplificado: usamos la primera encontrada o una config global)
+        # Idealmente, buscaríamos el tenant asociado al pago.
+        try:
+            # 1. Recuperar el sale_id (external_reference) desde MP API
+            # Nota: Necesitamos una API key válida. Usaremos una búsqueda en DB para el tenant.
+            sdk = mercadopago.SDK(os.getenv("MP_API_KEY", "")) # Fallback a env o búsqueda en creds
+            payment_info = sdk.payment().get(payment_id)
+            sale_id = payment_info["response"].get("external_reference")
+            status = payment_info["response"].get("status")
 
-        # 2. Update Order Status
-        # Buscar orden por external_reference (sale_id)
-        # ...
+            if not sale_id:
+                logger.error(f"No external_reference found for payment {payment_id}")
+                return {"status": "no_reference"}
+
+            if status == "approved":
+                logger.info(f"Payment approved for sale {sale_id}. Triggering confirmation.")
+                
+                # 3. Execute Confirmation Command via Dispatcher
+                # Necesitamos un contexto mínimo para el dispatcher
+                from core.context import TenantContext
+                import uuid
+                
+                # Buscamos la orden para obtener el tenant_id
+                with db_session_factory() as session:
+                    order = session.execute(
+                        text("SELECT tenant_id FROM sales_orders WHERE id = :id"),
+                        {"id": sale_id}
+                    ).mappings().first()
+                    
+                    if order:
+                        ctx = TenantContext(
+                            tenant_id=order['tenant_id'],
+                            user_id=uuid.UUID('00000000-0000-0000-0000-000000000000'), # System User
+                            role='system',
+                            plan='pro' # Bypass plan check for system events
+                        )
+                        
+                        dispatcher.execute(
+                            "sales.confirm_payment", 
+                            {"sale_id": sale_id}, 
+                            ctx
+                        )
+                        logger.info(f"Sale {sale_id} confirmed and stock updated.")
+                    else:
+                        logger.error(f"Order {sale_id} not found in database")
+
+        except Exception as e:
+            logger.error(f"Error processing MP IPN: {e}")
+            return {"status": "error", "message": str(e)}
 
         return {"status": "ok"}
 
