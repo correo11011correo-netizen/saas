@@ -27,13 +27,9 @@ class CommandDispatcher:
             if hasattr(attr, "_is_command"):
                 cmd_name = attr._command_name
                 self.register(cmd_name, attr)
-                logger.info(
-                    f"Auto-registered command: {cmd_name} from {handler.__class__.__name__}"
-                )
 
     def register(self, name: str, func: Callable):
         self.registry[name] = func
-        logger.info(f"Command registered: {name}")
 
     def execute(
         self, command_name: str, params: Dict[str, Any], context: TenantContext
@@ -80,6 +76,13 @@ class CommandDispatcher:
     def _audit(self, context: TenantContext, command: str, params: Dict):
         from sqlalchemy import text
         import time
+        import json
+
+        class UUIDEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, uuid.UUID):
+                    return str(obj)
+                return super().default(obj)
 
         max_retries = 3
         for attempt in range(max_retries):
@@ -94,7 +97,7 @@ class CommandDispatcher:
                         "tid": context.tenant_id,
                         "uid": context.user_id,
                         "cmd": command,
-                        "p": json.dumps(params),
+                        "p": json.dumps(params, cls=UUIDEncoder),
                     },
                 )
                 session.commit()

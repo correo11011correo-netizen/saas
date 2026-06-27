@@ -368,12 +368,6 @@ class WhatsappCommandHandler:
                 return ServiceResponse.error_res("No bot profile associated with this session/request", "BOT_PROFILE_MISSING")
 
             # Buscamos la credencial asociada al bot_profile_id actual para este tenant
-            # Nota: Un bot_profile_id puede estar asignado a múltiples credenciales (números).
-            # Pero para enviar un mensaje a 'to', necesitamos saber qué número (credencial) usar.
-            # El flujo lógico es: BotProfile -> BotAssignment -> Credential.
-            # Sin embargo, si queremos responder a un mensaje, deberíamos usar la credencial que recibió el mensaje.
-            # En este caso, buscaremos la credencial que está vinculada a este bot_profile_id.
-            
             cred_info = (
                 session.execute(
                     text(
@@ -392,9 +386,20 @@ class WhatsappCommandHandler:
             )
 
             if not cred_info:
-                logger.error(f"No credentials found for bot profile {bot_profile_id}")
+                logger.info(f"No specific credential for bot profile {bot_profile_id}, searching fallback for tenant {context.tenant_id}")
+                cred_info = (
+                    session.execute(
+                        text("SELECT api_key, metadata FROM credentials WHERE service_name = 'whatsapp' AND tenant_id = :tid LIMIT 1"),
+                        {"tid": context.tenant_id},
+                    )
+                    .mappings()
+                    .first()
+                )
+
+            if not cred_info:
+                logger.error(f"No WhatsApp credentials found for tenant {context.tenant_id}")
                 return ServiceResponse.error_res(
-                    "WhatsApp credentials not found for this bot profile", "WHATSAPP_CREDS_ERROR"
+                    "WhatsApp credentials not found", "WHATSAPP_CREDS_ERROR"
                 )
 
             import json
