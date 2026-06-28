@@ -4,6 +4,15 @@
  */
 
 window.BotManager = {
+    // Definición de funciones disponibles para los bots
+    FUNCTIONS: {
+        manage_stock: "📦 Consultar Stock",
+        process_sales: "🛒 Realizar Venta",
+        generate_payments: "💳 Generar Cobro",
+        customer_support: "🎧 Soporte y Ayuda",
+        bot_orchestration: "🤖 Cambiar de Bot"
+    },
+
     async render() {
         UI.render('app-content', `
             <div class="module-panel">
@@ -30,10 +39,21 @@ window.BotManager = {
 
                 <!-- Formulario: Crear Bot -->
                 <div id="create-bot-form" style="display: none; margin-top: var(--spacing-lg); padding: var(--spacing-md); background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: var(--radius-md);">
-                    <h4>Crear Nuevo Bot</h4>
-                    <div style="display: flex; flex-direction: column; gap: var(--spacing-sm); max-width: 400px;">
-                        <input type="text" id="new-bot-name" class="input-field" placeholder="Nombre del Bot (ej: Bot Stock, Bot Ventas)">
-                        <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <h4>Crear Nuevo Bot (Empleado Digital)</h4>
+                    <div style="display: flex; flex-direction: column; gap: var(--spacing-sm); max-width: 500px;">
+                        <label>Nombre del Bot</label>
+                        <input type="text" id="new-bot-name" class="input-field" placeholder="Ej: Asistente de Ventas, Bot de Stock...">
+                        
+                        <label style="margin-top: 10px; font-weight: bold;">Habilidades / Funciones:</label>
+                        <div id="bot-functions-selector" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: white; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--color-border);">
+                            ${Object.entries(this.FUNCTIONS).map(([key, label]) => `
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+                                    <input type="checkbox" class="bot-func-checkbox" value="${key}"> ${label}
+                                </label>
+                            `).join('')}
+                        </div>
+
+                        <div style="display: flex; gap: 10px; margin-top: 15px;">
                             <button class="btn btn-primary" onclick="BotManager.createBot()">Crear Bot</button>
                             <button class="btn" onclick="BotManager.hideCreateBotForm()">Cancelar</button>
                         </div>
@@ -133,6 +153,8 @@ window.BotManager = {
 
             const html = bots.map(bot => {
                 const caps = bot.capabilities || {};
+                const activeFuncs = caps.functions || [];
+                
                 return `
                     <div class="bot-card">
                         <div class="bot-card-header">
@@ -142,30 +164,19 @@ window.BotManager = {
                             </div>
                         </div>
                         <div class="capabilities-list">
-                            <div class="capability-row">
-                                <span>📦 Acceso a Stock</span>
-                                <label class="switch">
-                                    <input type="checkbox" ${caps.can_manage_stock ? 'checked' : ''} 
-                                           onchange="BotManager.toggleCapability('${bot.id}', 'can_manage_stock', this.checked)">
-                                    <span class="slider"></span>
-                                </label>
-                            </div>
-                            <div class="capability-row">
-                                <span>🛒 Ventas / Cobros</span>
-                                <label class="switch">
-                                    <input type="checkbox" ${caps.can_sell ? 'checked' : ''} 
-                                           onchange="BotManager.toggleCapability('${bot.id}', 'can_sell', this.checked)">
-                                    <span class="slider"></span>
-                                </label>
-                            </div>
-                            <div class="capability-row">
-                                <span>💳 Mercado Pago / API</span>
-                                <label class="switch">
-                                    <input type="checkbox" ${caps.can_process_payments ? 'checked' : ''} 
-                                           onchange="BotManager.toggleCapability('${bot.id}', 'can_process_payments', this.checked)">
-                                    <span class="slider"></span>
-                                </label>
-                            </div>
+                            ${Object.entries(this.FUNCTIONS).map(([key, label]) => {
+                                const isActive = activeFuncs.includes(key);
+                                return `
+                                    <div class="capability-row">
+                                        <span>${label}</span>
+                                        <label class="switch">
+                                            <input type="checkbox" ${isActive ? 'checked' : ''} 
+                                                   onchange="BotManager.toggleCapability('${bot.id}', '${key}', this.checked)">
+                                            <span class="slider"></span>
+                                        </label>
+                                    </div>
+                                `;
+                            }).join('')}
                         </div>
                     </div>
                 `;
@@ -177,7 +188,7 @@ window.BotManager = {
         }
     },
 
-    async toggleCapability(botId, capKey, value) {
+    async toggleCapability(botId, funcKey, value) {
         try {
             UI.showLoading();
             // Obtenemos el bot actual para preservar otras capacidades
@@ -186,16 +197,25 @@ window.BotManager = {
             
             if (!bot) throw new Error('Bot no encontrado');
 
-            const updatedCaps = { ...bot.capabilities, [capKey]: value };
+            const caps = bot.capabilities || {};
+            const functions = caps.functions || [];
+            
+            if (value && !functions.includes(funcKey)) {
+                functions.push(funcKey);
+            } else if (!value && functions.includes(funcKey)) {
+                functions = functions.filter(f => f !== funcKey);
+            }
+            
+            const updatedCaps = { ...caps, functions };
             
             await API.execute('bot.update_capabilities', { 
                 bot_profile_id: botId, 
                 capabilities: updatedCaps 
             });
 
-            UI.toast(`Capacidad ${capKey} actualizada`, 'success');
+            UI.toast(`Habilidad ${this.FUNCTIONS[funcKey] || funcKey} actualizada`, 'success');
         } catch (e) {
-            UI.toast(`Error actualizando capacidad: ${e.message}`, 'error');
+            UI.toast(`Error actualizando habilidad: ${e.message}`, 'error');
             await this.loadBots(); 
         } finally {
             UI.hideLoading();
@@ -295,10 +315,15 @@ window.BotManager = {
         const name = document.getElementById('new-bot-name').value;
         if (!name) return UI.toast('El nombre es requerido', 'error');
 
+        const functions = [];
+        document.querySelectorAll('.bot-func-checkbox:checked').forEach(checkbox => {
+            functions.push(checkbox.value);
+        });
+
         try {
             UI.showLoading();
-            await API.execute('bot.create', { name });
-            UI.toast('Motor de Bot creado exitosamente', 'success');
+            await API.execute('bot.create', { name, functions });
+            UI.toast('Empleado Digital creado exitosamente', 'success');
             this.hideCreateBotForm();
             await this.loadBots();
             await this.loadAssignments();

@@ -171,12 +171,26 @@ class BotEngine:
         if is_first_message:
             logger.info(f"Flujo de Bienvenida para {sender} con Bot {active_bot_profile_id}")
 
-            node_inicio = (
+            # Obtener el start_node_id desde las capabilities del bot
+            bot_profile = (
                 session.execute(
-                    text("SELECT id, prompt FROM bot_nodes WHERE name = 'inicio' AND tenant_id = :tid AND bot_profile_id = :bid"),
-                    {"tid": tenant_id, "bid": active_bot_profile_id},
+                    text("SELECT capabilities FROM bot_profiles WHERE id = :bid"),
+                    {"bid": active_bot_profile_id},
                 ).mappings().first()
             )
+            
+            start_node_id = None
+            if bot_profile and bot_profile["capabilities"]:
+                start_node_id = bot_profile["capabilities"].get("start_node_id")
+
+            node_inicio = None
+            if start_node_id:
+                node_inicio = (
+                    session.execute(
+                        text("SELECT id, prompt FROM bot_nodes WHERE id = :nid AND tenant_id = :tid AND bot_profile_id = :bid"),
+                        {"nid": start_node_id, "tid": tenant_id, "bid": active_bot_profile_id},
+                    ).mappings().first()
+                )
 
             msg_final = settings["welcome_message"]
             if node_inicio:
@@ -212,31 +226,38 @@ class BotEngine:
                     target_bot_id = option["next_node_id"]
                     logger.info(f"Cambiando bot a {target_bot_id} para {sender}")
                     
-                    session.execute(
-                        text("UPDATE whatsapp_sessions SET bot_profile_id = :bid, current_node_id = NULL WHERE phone_number = :phone AND tenant_id = :tid"),
-                        {"bid": target_bot_id, "phone": sender, "tid": tenant_id}
-                    )
-                    session.commit()
-                    
-                    # Ahora procesamos el mensaje nuevamente pero con el nuevo perfil
-                    # Para evitar recursividad infinita, llamamos a una versión simplificada o simplemente
-                    # enviamos la bienvenida del nuevo bot.
-                    new_settings = self._get_settings(session, tenant_id, target_bot_id)
-                    node_inicio_nuevo = (
+                    # Buscar el start_node_id del bot destino
+                    target_profile = (
                         session.execute(
-                            text("SELECT id, prompt FROM bot_nodes WHERE name = 'inicio' AND tenant_id = :tid AND bot_profile_id = :bid"),
-                            {"tid": tenant_id, "bid": target_bot_id},
+                            text("SELECT capabilities FROM bot_profiles WHERE id = :bid"),
+                            {"bid": target_bot_id},
                         ).mappings().first()
                     )
                     
+                    target_start_node_id = None
+                    if target_profile and target_profile["capabilities"]:
+                        target_start_node_id = target_profile["capabilities"].get("start_node_id")
+
+                    session.execute(
+                        text("UPDATE whatsapp_sessions SET bot_profile_id = :bid, current_node_id = :cnid WHERE phone_number = :phone AND tenant_id = :tid"),
+                        {"bid": target_bot_id, "cnid": target_start_node_id, "phone": sender, "tid": tenant_id}
+                    )
+                    session.commit()
+                    
+                    # Obtener el prompt del nodo de inicio del nuevo bot para responder
+                    node_inicio_nuevo = None
+                    if target_start_node_id:
+                        node_inicio_nuevo = (
+                            session.execute(
+                                text("SELECT id, prompt FROM bot_nodes WHERE id = :nid AND tenant_id = :tid AND bot_profile_id = :bid"),
+                                {"nid": target_start_node_id, "tid": tenant_id, "bid": target_bot_id},
+                            ).mappings().first()
+                        )
+                    
+                    new_settings = self._get_settings(session, tenant_id, target_bot_id)
                     msg_switch = f"Cambiando al modo: {new_settings['bot_name']}... 🤖"
                     if node_inicio_nuevo:
                         msg_switch += f"\\n\\n{node_inicio_nuevo['prompt']}"
-                        session.execute(
-                            text("UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid"),
-                            {"nid": node_inicio_nuevo["id"], "phone": sender, "tid": tenant_id}
-                        )
-                        session.commit()
                     
                     self._send_immediate_response(session, tenant_id, sender, msg_switch, target_bot_id)
                     return

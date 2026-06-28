@@ -546,23 +546,78 @@ class BotManagerCommandHandler:
     """
     @command(
         name="bot.create",
-        description="Creates a new specialized bot profile with default settings and a welcome node.",
-        params_model={"name": "string"},
+        description="Creates a specialized bot 'employee' with specific functions and a dynamic menu.",
+        params_model={"name": "string", "functions": "list"},
     )
     def create_bot(
-        self, session: Session, context: TenantContext, name: str
+        self, session: Session, context: TenantContext, name: str, functions: List[str] = None
     ) -> ServiceResponse:
         try:
+            if functions is None:
+                functions = []
+
             # 1. Create the Bot Profile
             res = session.execute(
                 text(
-                    "INSERT INTO bot_profiles (tenant_id, name) VALUES (:tid, :name) RETURNING id"
+                    "INSERT INTO bot_profiles (tenant_id, name, capabilities) VALUES (:tid, :name, :caps) RETURNING id"
                 ),
-                {"tid": context.tenant_id, "name": name},
+                {"tid": context.tenant_id, "name": name, "caps": json.dumps({"functions": functions})},
             )
             bot_id = res.scalar()
 
-            # 2. Create Default Settings for this bot
+            # 2. Create the Root Node
+            node_res = session.execute(
+                text(
+                    """
+                    INSERT INTO bot_nodes (name, prompt, tenant_id, bot_profile_id)
+                    VALUES ('root', :prompt, :tid, :bid)
+                    RETURNING id
+                    """
+                ),
+                {
+                    "prompt": f"Bienvenido a {name}. 🤖\\n\\nSeleccione una opción del menú para comenzar. 👇",
+                    "tid": context.tenant_id,
+                    "bid": bot_id,
+                },
+            )
+            root_node_id = node_res.scalar()
+
+            # 3. Link Root Node as start_node_id in capabilities
+            session.execute(
+                text(
+                    "UPDATE bot_profiles SET capabilities = jsonb_set(capabilities, '{start_node_id}', :sid, true) WHERE id = :bid"
+                ),
+                {"sid": f'"{root_node_id}"', "bid": bot_id},
+            )
+
+            # 4. Dynamically Generate Menu Options based on functions
+            FUNCTION_MAP = {
+                "manage_stock": {"label": "📦 Consultar Stock", "action": "search_products"},
+                "process_sales": {"label": "🛒 Realizar Venta", "action": "process_sale"},
+                "generate_payments": {"label": "💳 Generar Cobro", "action": "generate_payment"},
+                "customer_support": {"label": "🎧 Soporte y Ayuda", "action": "send_support_info"},
+                "bot_orchestration": {"label": "🤖 Cambiar de Bot", "action": "switch_bot"},
+            }
+
+            for func in functions:
+                if func in FUNCTION_MAP:
+                    session.execute(
+                        text(
+                            """
+                            INSERT INTO bot_options (node_id, label, action, tenant_id, bot_profile_id)
+                            VALUES (:nid, :label, :action, :tid, :bid)
+                            """
+                        ),
+                        {
+                            "nid": root_node_id,
+                            "label": FUNCTION_MAP[func]["label"],
+                            "action": FUNCTION_MAP[func]["action"],
+                            "tid": context.tenant_id,
+                            "bid": bot_id,
+                        },
+                    )
+
+            # 5. Initialize Default Settings
             session.execute(
                 text(
                     """
@@ -581,26 +636,11 @@ class BotManagerCommandHandler:
                 },
             )
 
-            # 3. Create the mandatory 'inicio' node for the bot to be functional
-            session.execute(
-                text(
-                    """
-                    INSERT INTO bot_nodes (name, prompt, tenant_id, bot_profile_id)
-                    VALUES ('inicio', :prompt, :tid, :bid)
-                    """
-                ),
-                {
-                    "prompt": "Selecciona una opción del menú para comenzar. 👇",
-                    "tid": context.tenant_id,
-                    "bid": bot_id,
-                },
-            )
-
             session.commit()
-            return ServiceResponse.success_res(message=f"Bot '{name}' created and configured successfully.")
+            return ServiceResponse.success_res(message=f"Bot employee '{name}' created with {len(functions)} functions.")
         except Exception as e:
             session.rollback()
-            return ServiceResponse.error_res(f"Error creating bot: {str(e)}", "BOT_CREATE_ERROR")
+            return ServiceResponse.error_res(f"Error creating bot employee: {str(e)}", "BOT_CREATE_ERROR")
 
     @command(
         name="bot.assign",
