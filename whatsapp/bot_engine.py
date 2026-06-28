@@ -175,7 +175,6 @@ class BotEngine:
         if is_first_message:
             logger.info(f"Flujo de Bienvenida para {sender} con Bot {active_bot_profile_id}")
 
-            # Obtener el start_node_id desde las capabilities del bot
             bot_profile = (
                 session.execute(
                     text("SELECT capabilities FROM bot_profiles WHERE id = :bid"),
@@ -208,10 +207,59 @@ class BotEngine:
                     {"nid": node_inicio["id"], "phone": sender, "tid": tenant_id},
                 )
                 session.commit()
+                logger.info(f"Sesión de {sender} vinculada al nodo inicio: {node_inicio['id']}")
             return
 
+        # --- MEJORA: DETECCIÓN DE INTENCIONES GLOBALES ---
+        # Si no hay nodo activo o el mensaje es una palabra clave global (ej: 'Stock', 'Menú')
+        FUNCTION_MAP = {
+            "stock": "manage_stock",
+            "productos": "manage_stock",
+            "venta": "process_sales",
+            "cobrar": "generate_payments",
+            "ayuda": "customer_support",
+            "soporte": "customer_support",
+            "menu": "root_menu",
+        }
+        
+        msg_lower = text_message.lower().strip()
+        if not current_node_id or msg_lower in FUNCTION_MAP:
+            if msg_lower == "menu":
+                # Volver al inicio
+                bot_profile = session.execute(
+                    text("SELECT capabilities FROM bot_profiles WHERE id = :bid"),
+                    {"bid": active_bot_profile_id},
+                ).mappings().first()
+                start_node_id = bot_profile["capabilities"].get("start_node_id") if bot_profile else None
+                if start_node_id:
+                    session.execute(
+                        text("UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid"),
+                        {"nid": start_node_id, "phone": sender, "tid": tenant_id}
+                    )
+                    session.commit()
+                    # Recargar nodo para responder
+                    node = session.execute(
+                        text("SELECT prompt FROM bot_nodes WHERE id = :nid"),
+                        {"nid": start_node_id}
+                    ).mappings().first()
+                    self._send_immediate_response(session, tenant_id, sender, node["prompt"] if node else "Menú principal", active_bot_profile_id)
+                    return
+
+            if msg_lower in FUNCTION_MAP:
+                intent = FUNCTION_MAP[msg_lower]
+                if intent == "manage_stock":
+                    logger.info(f"Intención GLOBAL detectada: Stock para {sender}")
+                    self._send_immediate_response(session, tenant_id, sender, "Por favor, escribe el nombre del producto que deseas buscar. 🔍", active_bot_profile_id)
+                    session.execute(
+                        text("UPDATE whatsapp_sessions SET current_node_id = 'SEARCH_MODE' WHERE phone_number = :phone AND tenant_id = :tid"),
+                        {"phone": sender, "tid": tenant_id}
+                    )
+                    session.commit()
+                    return
+                # ... otras intenciones pueden ir aquí
+
         # Caso B: Interacción con Menús (Nodos)
-        if current_node_id:
+        if current_node_id and current_node_id != 'SEARCH_MODE':
             logger.info(f"Procesando opción '{text_message}' en nodo {current_node_id} (Bot: {active_bot_profile_id})")
             option = (
                 session.execute(
@@ -226,11 +274,9 @@ class BotEngine:
             if option:
                 # ACCIÓN: switch_bot -> Cambiar el perfil del bot en la sesión
                 if option["action"] == "switch_bot":
-                    # El next_node_id se usa aquí como el ID del BOT PROFILE destino
                     target_bot_id = option["next_node_id"]
                     logger.info(f"Cambiando bot a {target_bot_id} para {sender}")
                     
-                    # Buscar el start_node_id del bot destino
                     target_profile = (
                         session.execute(
                             text("SELECT capabilities FROM bot_profiles WHERE id = :bid"),
@@ -248,7 +294,6 @@ class BotEngine:
                     )
                     session.commit()
                     
-                    # Obtener el prompt del nodo de inicio del nuevo bot para responder
                     node_inicio_nuevo = None
                     if target_start_node_id:
                         node_inicio_nuevo = (
@@ -266,7 +311,6 @@ class BotEngine:
                     self._send_immediate_response(session, tenant_id, sender, msg_switch, target_bot_id)
                     return
 
-                # Si la opción tiene un nodo siguiente, navegamos
                 if option["next_node_id"]:
                     node = (
                         session.execute(
@@ -283,11 +327,8 @@ class BotEngine:
                         session.commit()
                         return
 
-                # ACCIÓN: search_products -> Búsqueda en el Bot de Stock
                 if option["action"] == "search_products":
-                    # En este caso, el mensaje actual es el trigger, pero queremos que el siguiente mensaje sea la búsqueda.
                     self._send_immediate_response(session, tenant_id, sender, "Por favor, escribe el nombre del producto que deseas buscar. 🔍", active_bot_profile_id)
-                    # Marcamos la sesión para que el próximo mensaje se trate como búsqueda
                     session.execute(
                         text("UPDATE whatsapp_sessions SET current_node_id = 'SEARCH_MODE' WHERE phone_number = :phone AND tenant_id = :tid"),
                         {"phone": sender, "tid": tenant_id}
