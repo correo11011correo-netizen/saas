@@ -251,7 +251,7 @@ class BotEngine:
                     logger.info(f"Intención GLOBAL detectada: Stock para {sender}")
                     self._send_immediate_response(session, tenant_id, sender, "Por favor, escribe el nombre del producto que deseas buscar. 🔍", active_bot_profile_id)
                     session.execute(
-                        text("UPDATE whatsapp_sessions SET current_node_id = 'SEARCH_MODE' WHERE phone_number = :phone AND tenant_id = :tid"),
+                        text("UPDATE whatsapp_sessions SET current_node_id = SEARCH_MODE_UUID WHERE phone_number = :phone AND tenant_id = :tid"),
                         {"phone": sender, "tid": tenant_id}
                     )
                     session.commit()
@@ -259,7 +259,7 @@ class BotEngine:
                 # ... otras intenciones pueden ir aquí
 
         # Caso B: Interacción con Menús (Nodos)
-        if current_node_id and current_node_id != 'SEARCH_MODE':
+        if current_node_id and current_node_id != SEARCH_MODE_UUID:
             logger.info(f"Procesando opción '{text_message}' en nodo {current_node_id} (Bot: {active_bot_profile_id})")
             option = (
                 session.execute(
@@ -527,4 +527,6 @@ class BotEngine:
             "whatsapp.send_text",
             {"to": sender, "body": body, "bot_profile_id": bot_profile_id},
             context,
+        )
+t,
         )
