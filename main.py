@@ -27,7 +27,11 @@ from core.commands import core_commands
 from core.credentials import credentials_commands
 from sales.commands import sales_commands
 from stock.commands import stock_commands
+from stock.sync import stock_sync_commands
 from whatsapp.commands import whatsapp_commands, bot_manager_commands
+from employees.commands import employee_commands
+from core.saas_admin import saas_admin_commands
+from core.billing import billing_commands
 
 # ... (Database setup and FastAPI app setup remain as before, I will keep the existing code and just clean up the functions below)
 
@@ -55,11 +59,16 @@ async def lifespan(app: FastAPI):
 
     # 2. Register all command handlers
     dispatcher.register_handler(core_commands)
+    dispatcher.register_handler(core_commands)
     dispatcher.register_handler(credentials_commands)
     dispatcher.register_handler(sales_commands)
     dispatcher.register_handler(stock_commands)
+    dispatcher.register_handler(stock_sync_commands)
     dispatcher.register_handler(whatsapp_commands)
     dispatcher.register_handler(bot_manager_commands)
+    dispatcher.register_handler(employee_commands)
+    dispatcher.register_handler(saas_admin_commands)
+    dispatcher.register_handler(billing_commands)
 
     # Inject DB factory into Webhooks AND Dispatcher
     from core.webhooks import set_db_session_factory
@@ -131,7 +140,31 @@ def get_current_context(
     return context
 
 
+# --- SDUI ENDPOINT ---
+
+@app.get("/api/boot")
+def boot_app(context: TenantContext = Depends(get_current_context), db=Depends(get_db)):
+    """
+    The 'Startup Contract'. Delivers the entire UI and config manifest to the APK.
+    Filters available modules based on plan and custom entitlements.
+    """
+    from core.sdui import sdui_engine
+    from core.module_entitlements import module_entitlement_service
+    
+    # 1. Get the basic manifest (theme, base layout)
+    manifest = sdui_engine.get_boot_manifest(db, context)
+    
+    # 2. Calculate which modules this specific tenant is allowed to see
+    active_modules = module_entitlement_service.get_active_modules(db, context)
+    
+    # 3. Filter the layout to only include components belonging to active modules
+    # This ensures the APK never even receives the definition of locked modules.
+    manifest["active_modules"] = list(active_modules)
+    
+    return manifest
+
 # --- AUTH ENDPOINTS ---
+
 
 
 @app.post("/auth/register")

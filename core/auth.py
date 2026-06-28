@@ -4,12 +4,13 @@ import jwt
 import datetime
 import secrets
 import json
+import os
 from typing import Optional, Dict
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from .context import TenantContext
 
-SECRET_KEY = "OMNICORE_SUPER_SECRET_KEY_CHANGE_IN_PROD"
+SECRET_KEY = os.getenv("JWT_SECRET", "OMNICORE_FALLBACK_SECRET_KEY_CHANGE_IN_PROD")
 ALGORITHM = "HS256"
 
 

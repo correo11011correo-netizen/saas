@@ -127,47 +127,54 @@ async def handle_mp_ipn(request: Request, db=Depends(get_db)):
         # Idealmente, buscaríamos el tenant asociado al pago.
         try:
             # 1. Recuperar el sale_id (external_reference) desde MP API
-            # Nota: Necesitamos una API key válida. Usaremos una búsqueda en DB para el tenant.
-            sdk = mercadopago.SDK(os.getenv("MP_API_KEY", "")) # Fallback a env o búsqueda en creds
-            payment_info = sdk.payment().get(payment_id)
-            sale_id = payment_info["response"].get("external_reference")
-            status = payment_info["response"].get("status")
-
-            if not sale_id:
-                logger.error(f"No external_reference found for payment {payment_id}")
-                return {"status": "no_reference"}
-
-            if status == "approved":
-                logger.info(f"Payment approved for sale {sale_id}. Triggering confirmation.")
+            # Para esto necesitamos el tenant_id de la orden y su API Key
+            with db_session_factory() as session:
+                # Primero buscamos la orden para saber a qué tenant pertenece
+                # Como el IPN solo nos da el payment_id, primero consultamos MP con una key temporal o general 
+                # para obtener el external_reference, LUEGO buscamos el tenant.
+                # Pero para ser estrictos, usaremos la MP_API_KEY global solo para el primer salto.
                 
-                # 3. Execute Confirmation Command via Dispatcher
-                # Necesitamos un contexto mínimo para el dispatcher
-                from core.context import TenantContext
-                import uuid
-                
-                # Buscamos la orden para obtener el tenant_id
-                with db_session_factory() as session:
+                sdk = mercadopago.SDK(os.getenv("MP_API_KEY", "")) 
+                payment_info = sdk.payment().get(payment_id)
+                sale_id = payment_info["response"].get("external_reference")
+                status = payment_info["response"].get("status")
+
+                if not sale_id:
+                    logger.error(f"No external_reference found for payment {payment_id}")
+                    return {"status": "no_reference"}
+
+                if status == "approved":
+                    logger.info(f"Payment approved for sale {sale_id}. Triggering confirmation.")
+                    
+                    # Ahora buscamos el tenant y su credencial específica
                     order = session.execute(
                         text("SELECT tenant_id FROM sales_orders WHERE id = :id"),
                         {"id": sale_id}
                     ).mappings().first()
                     
-                    if order:
-                        ctx = TenantContext(
-                            tenant_id=order['tenant_id'],
-                            user_id=uuid.UUID('00000000-0000-0000-0000-000000000000'), # System User
-                            role='system',
-                            plan='pro' # Bypass plan check for system events
-                        )
-                        
-                        dispatcher.execute(
-                            "sales.confirm_payment", 
-                            {"sale_id": sale_id}, 
-                            ctx
-                        )
-                        logger.info(f"Sale {sale_id} confirmed and stock updated.")
-                    else:
+                    if not order:
                         logger.error(f"Order {sale_id} not found in database")
+                        return {"status": "order_not_found"}
+                    
+                    tenant_id = order['tenant_id']
+                    
+                    # Usamos el dispatcher con el contexto del tenant
+                    from core.context import TenantContext
+                    import uuid
+                    
+                    ctx = TenantContext(
+                        tenant_id=tenant_id,
+                        user_id=uuid.UUID('00000000-0000-0000-0000-000000000000'),
+                        role='system',
+                        plan='pro'
+                    )
+                    
+                    dispatcher.execute(
+                        "sales.confirm_payment", 
+                        {"sale_id": sale_id}, 
+                        ctx
+                    )
+                    logger.info(f"Sale {sale_id} confirmed and stock updated.")
 
         except Exception as e:
             logger.error(f"Error processing MP IPN: {e}")

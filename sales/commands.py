@@ -15,7 +15,7 @@ class SalesCommandHandler:
     @command(
         name="sales.create",
         description="Creates a sales order and generates a Mercado Pago payment link.",
-        params_model={"items": "list", "total": "float", "account_alias": "string"},
+        params_model={"items": "list", "total": "float", "account_alias": "string", "client_request_id": "string"},
     )
     def create_sale(
         self,
@@ -24,8 +24,23 @@ class SalesCommandHandler:
         items: list,
         total: float,
         account_alias: str,
+        client_request_id: str = None,
     ) -> ServiceResponse:
         try:
+            # 0. Idempotency Check: If a request ID is provided, check if sale already exists
+            if client_request_id:
+                existing_sale = session.execute(
+                    text("SELECT id FROM sales_orders WHERE client_request_id = :rid AND tenant_id = :tid"),
+                    {"rid": client_request_id, "tid": context.tenant_id}
+                ).mappings().first()
+                
+                if existing_sale:
+                    # Sale already exists, return its ID (Avoid duplication during offline sync)
+                    return ServiceResponse.success_res(
+                        data={"sale_id": str(existing_sale["id"])}, 
+                        message="Sale already registered (idempotency check)."
+                    )
+
             # 1. Get credentials for MP
             cred = (
                 session.execute(
@@ -46,12 +61,13 @@ class SalesCommandHandler:
             # 2. Create Sale in DB
             sale_id = session.execute(
                 text(
-                    "INSERT INTO sales_orders (tenant_id, total, payment_status) VALUES (:tid, :total, 'pending') RETURNING id"
+                    "INSERT INTO sales_orders (tenant_id, total, payment_status, client_request_id) VALUES (:tid, :total, 'pending', :rid) RETURNING id"
                 ),
-                {"tid": context.tenant_id, "total": total},
+                {"tid": context.tenant_id, "total": total, "rid": client_request_id},
             ).scalar()
 
             # 3. SAVE ITEMS (Cierre del ciclo de stock)
+
             for item in items:
                 # Esperamos item con: code, quantity, price
                 subtotal = float(item['price']) * int(item['quantity'])

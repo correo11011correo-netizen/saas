@@ -42,7 +42,7 @@ def init_db():
                 """,
             )
 
-            # Add webhook_secret and plan if they don't exist
+            # Add webhook_secret, plan and business_category if they don't exist
             run_query(
                 cur,
                 """
@@ -53,6 +53,9 @@ def init_db():
                     END IF;
                     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tenants' AND column_name='plan') THEN
                         ALTER TABLE tenants ADD COLUMN plan VARCHAR(50) DEFAULT 'free';
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tenants' AND column_name='business_category') THEN
+                        ALTER TABLE tenants ADD COLUMN business_category VARCHAR(100) DEFAULT 'general';
                     END IF;
                     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='whatsapp_sessions' AND column_name='session_data') THEN
                         ALTER TABLE whatsapp_sessions ADD COLUMN session_data JSONB DEFAULT '{}';
@@ -92,7 +95,49 @@ def init_db():
                 """,
             )
 
+            # --- SDUI: Server-Driven UI Infrastructure ---
+            run_query(
+                cur,
+                """
+                CREATE TABLE IF NOT EXISTS ui_components (
+                    id VARCHAR(50) PRIMARY KEY, -- e.g., 'BtnPrimary', 'InputText', 'ProductCard'
+                    component_type VARCHAR(50) NOT NULL, -- 'button', 'input', 'card', 'list'
+                    default_props JSONB DEFAULT '{}'
+                );
+                """,
+            )
+
+            run_query(
+                cur,
+                """
+                CREATE TABLE IF NOT EXISTS ui_themes (
+                    tenant_id UUID PRIMARY KEY REFERENCES tenants(id),
+                    primary_color VARCHAR(7) DEFAULT '#000000',
+                    secondary_color VARCHAR(7) DEFAULT '#FFFFFF',
+                    accent_color VARCHAR(7) DEFAULT '#CCCCCC',
+                    dark_mode BOOLEAN DEFAULT false,
+                    logo_url TEXT
+                );
+                """,
+            )
+
+            run_query(
+                cur,
+                """
+                CREATE TABLE IF NOT EXISTS ui_layouts (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    tenant_id UUID REFERENCES tenants(id),
+                    screen_id VARCHAR(50) NOT NULL, -- e.g., 'home', 'checkout', 'stock_manage'
+                    layout_json JSONB NOT NULL, -- The tree of components and their props
+                    order_index INT DEFAULT 0,
+                    is_active BOOLEAN DEFAULT true,
+                    UNIQUE (tenant_id, screen_id)
+                );
+                """,
+            )
+
             # 2.2 Create Bot Profiles Table (The Logical Entity)
+
             run_query(
                 cur,
                 """
@@ -107,7 +152,125 @@ def init_db():
                 """,
             )
 
+            # --- OMNISTAFF: Employee Management System ---
+            run_query(
+                cur,
+                """
+                CREATE TABLE IF NOT EXISTS business_definitions (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    tenant_id UUID REFERENCES tenants(id),
+                    def_type VARCHAR(50) NOT NULL, -- 'permission', 'goal_type', 'task'
+                    def_key VARCHAR(100) NOT NULL, -- e.g., 'limpiar_heladera', 'ventas_mensuales'
+                    def_label VARCHAR(100), -- Human readable name: 'Limpiar Heladera'
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (tenant_id, def_type, def_key)
+                );
+                """,
+            )
+
+            run_query(
+                cur,
+                """
+                CREATE TABLE IF NOT EXISTS available_modules (
+                    module_id VARCHAR(100) PRIMARY KEY, -- e.g., 'sales_panel', 'stock_advanced'
+                    name VARCHAR(255) NOT NULL,
+                    base_plan VARCHAR(50) DEFAULT 'free', -- 'free', 'pro', 'enterprise'
+                    is_custom BOOLEAN DEFAULT false,
+                    created_// I will use a larger context for replace.
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+                """,
+            )
+
+            run_query(
+                cur,
+                """
+                CREATE TABLE IF NOT EXISTS tenant_modules (
+                    tenant_id UUID REFERENCES tenants(id),
+                    module_id VARCHAR(100) REFERENCES available_modules(module_id),
+                    assigned_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (tenant_id, module_id)
+                );
+                """,
+            )
+
+            run_query(
+                cur,
+                """
+                CREATE TABLE IF NOT EXISTS employees (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    tenant_id UUID REFERENCES tenants(id),
+                    user_id UUID REFERENCES users(id), -- Null if the employee is a Bot
+                    bot_profile_id UUID REFERENCES bot_profiles(id), -- Null if the employee is Human
+                    name VARCHAR(255) NOT NULL,
+                    role VARCHAR(100) NOT NULL,
+                    status VARCHAR(50) DEFAULT 'active',
+                    type VARCHAR(20) NOT NULL, -- 'human' or 'bot'
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+                """,
+            )
+
+            run_query(
+                cur,
+                """
+                CREATE TABLE IF NOT EXISTS employee_permissions (
+                    id SERIAL PRIMARY KEY,
+                    employee_id UUID REFERENCES employees(id),
+                    permission_key VARCHAR(100) NOT NULL, -- e.g., 'can_sell', 'can_restock', 'can_clean'
+                    granted BOOLEAN DEFAULT TRUE,
+                    UNIQUE (employee_id, permission_key)
+                );
+                """,
+            )
+
+            run_query(
+                cur,
+                """
+                CREATE TABLE IF NOT EXISTS employee_goals (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    employee_id UUID REFERENCES employees(id),
+                    goal_type VARCHAR(50) NOT NULL, -- 'sales_volume', 'revenue', 'appointments'
+                    target_value DECIMAL(12,2) NOT NULL,
+                    current_value DECIMAL(12,2) DEFAULT 0,
+                    start_date DATE NOT NULL,
+                    end_date DATE NOT NULL,
+                    tenant_id UUID REFERENCES tenants(id)
+                );
+                """,
+            )
+
+            # --- SAAS Monetization System ---
+            run_query(
+                cur,
+                """
+                CREATE TABLE IF NOT EXISTS saas_plans (
+                    plan_id VARCHAR(50) PRIMARY KEY, -- 'free', 'pro', 'enterprise'
+                    name VARCHAR(100) NOT NULL,
+                    monthly_price DECIMAL(12,2) DEFAULT 0,
+                    features JSONB DEFAULT '[]',
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+                """,
+            )
+
+            run_query(
+                cur,
+                """
+                CREATE TABLE IF NOT EXISTS tenant_subscriptions (
+                    tenant_id UUID PRIMARY KEY REFERENCES tenants(id),
+                    plan_id VARCHAR(50) REFERENCES saas_plans(plan_id),
+                    subscription_status VARCHAR(50) DEFAULT 'active', -- 'active', 'past_due', 'canceled'
+                    start_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    end_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    last_payment_date TIMESTAMP WITH TIME ZONE,
+                    auto_renew BOOLEAN DEFAULT true
+                );
+                """,
+            )
+
             # 2.3 Create Bot Assignments Table (The Connection Link)
+
             run_query(
                 cur,
                 """
@@ -245,6 +408,7 @@ def init_db():
                     "payment_status VARCHAR(50)",
                     "payment_link TEXT",
                     "metadata JSONB",
+                    "client_request_id UUID",
                 ],
                 "system_settings": ["key VARCHAR(100)", "value TEXT"],
                 "user_permissions": ["user_id UUID", "permission_key VARCHAR(100)"],

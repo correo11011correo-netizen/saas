@@ -1,14 +1,11 @@
-import json
 import logging
-import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from src.core.dispatcher.core_types import CoreContext, ServiceResponse
-from src.core.dispatcher.decorators import command
-from src.infrastructure.db.core_db_manager import core_db_manager
-from src.infrastructure.repositories.user_repository import UserRepository
+from core.types import ServiceResponse
+from core.decorators import command
+from core.context import TenantContext
 
 logger = logging.getLogger("OmniCore.SystemCommands")
 
@@ -27,23 +24,24 @@ class SystemCommandHandler:
     def get_logs(
         self,
         session: Session,
-        context: CoreContext,
+        context: TenantContext,
         limit: int = 50,
         offset: int = 0,
         command: Optional[str] = None,
     ) -> ServiceResponse:
         try:
-            query = "SELECT id, agent_id, command, status, message, timestamp FROM system_audit_log WHERE app_id = :app_id"
-            params = {"app_id": context.app_id}
+            query = "SELECT id, tenant_id, user_id, command, params, timestamp FROM audit_log WHERE tenant_id = :tid"
+            params = {"tid": context.tenant_id}
             if command:
                 query += " AND command = :command"
                 params["command"] = command
             query += " ORDER BY timestamp DESC LIMIT :limit OFFSET :offset"
             params["limit"] = limit
             params["offset"] = offset
-            results = core_db_manager.execute_raw(query, params).mappings().all()
+            
+            result = session.execute(text(query), params).mappings().all()
             return ServiceResponse.success_res(
-                data=[dict(row) for row in results], message="Audit logs retrieved."
+                data=[dict(row) for row in result], message="Audit logs retrieved."
             )
         except Exception as e:
             return ServiceResponse.error_res(f"Error: {str(e)}", "AUDIT_GET_ERROR")
@@ -56,17 +54,21 @@ class SystemCommandHandler:
     def create_user(
         self,
         session: Session,
-        context: CoreContext,
+        context: TenantContext,
         username: str,
         password: str,
         role: str = "employee",
     ) -> ServiceResponse:
         try:
-            repo = UserRepository(session, context.business_id)
             import hashlib
-
             password_hash = hashlib.sha256(password.encode()).hexdigest()
-            repo.create_user(username, password_hash, role=role)
+            
+            session.execute(
+                text(
+                    "INSERT INTO users (email, password_hash, role, tenant_id) VALUES (:email, :pass, :role, :tid)"
+                ),
+                {"email": username, "pass": password_hash, "role": role, "tid": context.tenant_id},
+            )
             session.commit()
             return ServiceResponse.success_res(
                 message=f"User {username} created successfully."
@@ -82,17 +84,15 @@ class SystemCommandHandler:
         description="Lists all employees and their assigned permissions.",
         params_model={},
     )
-    def list_users(self, session: Session, context: CoreContext) -> ServiceResponse:
+    def list_users(self, session: Session, context: TenantContext) -> ServiceResponse:
         try:
-            repo = UserRepository(session, context.business_id)
-            users = repo.list_users()
-            detailed_users = []
-            for user in users:
-                user_data = dict(user)
-                user_data["permissions"] = repo.get_user_permissions(user["id"])
-                detailed_users.append(user_data)
+            result = session.execute(
+                text("SELECT id, email, role FROM users WHERE tenant_id = :tid"),
+                {"tid": context.tenant_id},
+            ).mappings().all()
+            
             return ServiceResponse.success_res(
-                data=detailed_users, message="Employees listed."
+                data=[dict(row) for row in result], message="Employees listed."
             )
         except Exception as e:
             return ServiceResponse.error_res(

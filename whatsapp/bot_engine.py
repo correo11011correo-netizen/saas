@@ -9,8 +9,11 @@ import json
 
 logger = logging.getLogger("OmniCore.BotEngine")
 
-# Constant UUID to represent the search state in whatsapp_sessions.current_node_id
+# Constant UUIDs to represent special states in whatsapp_sessions.current_node_id
 SEARCH_MODE_UUID = uuid.UUID('00000000-0000-0000-0000-000000000001')
+CART_MODE_UUID = uuid.UUID('00000000-0000-0000-0000-000000000002')
+QUANTITY_MODE_UUID = uuid.UUID('00000000-0000-0000-0000-000000000003')
+PAYMENT_MODE_UUID = uuid.UUID('00000000-0000-0000-0000-000000000004')
 
 
 class BotEngine:
@@ -167,8 +170,6 @@ class BotEngine:
 
         if not settings.get("is_global_active", True):
             logger.info(f"Bot globalmente desactivado para {active_bot_profile_id}. Enviando mensaje de handoff.")
-            self._send_immediate_response(session, tenant_id, sender, settings["handoff_message"], active_bot_profile_id)
-            return
             self._send_immediate_response(session, tenant_id, sender, settings["handoff_message"], active_bot_profile_id)
             return
 
@@ -339,7 +340,65 @@ class BotEngine:
                     session.commit()
                     return
 
-        # --- MODO BÚSQUEDA O FALLBACK ---
+        # --- FLUJO DE CARRITO Y VENTAS ---
+
+        if current_node_id == QUANTITY_MODE_UUID:
+            logger.info(f"Procesando cantidad para {sender}: {text_message}")
+            session_info = session.execute(
+                text("SELECT session_data FROM whatsapp_sessions WHERE phone_number = :phone AND tenant_id = :tid"),
+                {"phone": sender, "tid": tenant_id},
+            ).mappings().first()
+            
+            s_data = session_info["session_data"] if session_info and session_info["session_data"] else {}
+            product_code = s_data.get("selected_product")
+            
+            if not product_code:
+                self._send_immediate_response(session, tenant_id, sender, "Hubo un error con la selección. Por favor, busca el producto nuevamente. 🔍", active_bot_profile_id)
+                session.execute(text("UPDATE whatsapp_sessions SET current_node_id = NULL WHERE phone_number = :phone AND tenant_id = :tid"), {"phone": sender, "tid": tenant_id})
+                session.commit()
+                return
+
+            if text_message.lower() == "no":
+                self._send_immediate_response(session, tenant_id, sender, "Entendido. Volviendo al menú... ↩️", active_bot_profile_id)
+                session.execute(text("UPDATE whatsapp_sessions SET current_node_id = NULL WHERE phone_number = :phone AND tenant_id = :tid"), {"phone": sender, "tid": tenant_id})
+                session.commit()
+                return
+
+            if text_message.lower() == "sí" or text_message.lower() == "si":
+                self._send_immediate_response(session, tenant_id, sender, "Perfecto. ¿Cuántas unidades deseas agregar? 🔢", active_bot_profile_id)
+                session.execute(
+                    text("UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid"),
+                    {"nid": CART_MODE_UUID, "phone": sender, "tid": tenant_id} # Usamos CART_MODE para esperar la cantidad
+                )
+                session.commit()
+                return
+
+            # Si el usuario ya escribió un número directamente
+            if text_message.isdigit():
+                qty = int(text_message)
+                if qty <= 0:
+                    self._send_immediate_response(session, tenant_id, sender, "Por favor ingresa una cantidad válida (mayor a 0).", active_bot_profile_id)
+                    return
+                
+                # Agregar al carrito
+                cart = s_data.get("cart", {})
+                cart[product_code] = cart.get(product_code, 0) + qty
+                
+                session.execute(
+                    text("UPDATE whatsapp_sessions SET session_data = :data WHERE phone_number = :phone AND tenant_id = :tid"),
+                    {"data": json.dumps({"cart": cart, "selected_product": None}), "phone": sender, "tid": tenant_id}
+                )
+                session.commit()
+                
+                self._send_immediate_response(session, tenant_id, sender, f"✅ Agregado: {qty} unidad(es).\n\n¿Deseas agregar más productos o finalizar la compra?\n\n1️⃣ Agregar más\n2️⃣ Finalizar compra 🛒", active_bot_profile_id)
+                session.execute(
+                    text("UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid"),
+                    {"nid": CART_MODE_UUID, "phone": sender, "tid": tenant_id}
+                )
+                session.commit()
+                return
+
+            self._send_immediate_response(session, tenant_id, sender, "Por favor, responde con 'SÍ' para agregar, 'NO' para cancelar, o escribe la cantidad directamente. 🔢", active_bot_profile_id)
 
         # Si estamos en modo búsqueda
         if current_node_id == SEARCH_MODE_UUID:
@@ -379,27 +438,21 @@ class BotEngine:
                                 f"Categoría: {product['category'] or 'N/A'}\n"
                                 f"Código: {product['code']}\n"
                                 f"Estado: {status}\n\n"
-                                f"Para volver al menú, escribe 'Menú'."
+                                f"¿Deseas agregar este producto al carrito? 🛒\n"
+                                f"Escribe *SÍ* para agregar o *Menú* para volver."
                             )
                             self._send_immediate_response(session, tenant_id, sender, response_msg, active_bot_profile_id)
                             
-                            # Limpiar resultados de búsqueda y volver al inicio
+                            # Guardamos el código del producto seleccionado para la fase de cantidad
                             session.execute(
-                                text("UPDATE whatsapp_sessions SET session_data = '{}' WHERE phone_number = :phone AND tenant_id = :tid"),
-                                {"phone": sender, "tid": tenant_id}
+                                text("UPDATE whatsapp_sessions SET session_data = :data WHERE phone_number = :phone AND tenant_id = :tid"),
+                                {"data": json.dumps({"selected_product": product['code']}), "phone": sender, "tid": tenant_id}
                             )
-                            
-                            node_inicio = (
-                                session.execute(
-                                    text("SELECT id FROM bot_nodes WHERE name = 'inicio' AND tenant_id = :tid AND bot_profile_id = :bid"),
-                                    {"tid": tenant_id, "bid": active_bot_profile_id},
-                                ).mappings().first()
+                            # Cambiamos al modo de espera de confirmación/cantidad
+                            session.execute(
+                                text("UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid"),
+                                {"nid": QUANTITY_MODE_UUID, "phone": sender, "tid": tenant_id}
                             )
-                            if node_inicio:
-                                session.execute(
-                                    text("UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid"),
-                                    {"nid": node_inicio["id"], "phone": sender, "tid": tenant_id}
-                                )
                             session.commit()
                             return
                 
