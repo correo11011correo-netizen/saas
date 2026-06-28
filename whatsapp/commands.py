@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -550,7 +550,7 @@ class BotManagerCommandHandler:
         params_model={"name": "string", "functions": "list"},
     )
     def create_bot(
-        self, session: Session, context: TenantContext, name: str, functions: List[str] = None
+        self, session: Session, context: TenantContext, name: str, functions: list[str] = None
     ) -> ServiceResponse:
         try:
             if functions is None:
