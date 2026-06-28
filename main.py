@@ -201,11 +201,8 @@ def execute_command(
 
 
 # --- MIDDLEWARE DE LOGGING ---
-@app.middleware("http")
-async def log_requests(request, call_next):
-    print(f"DEBUG: Petición recibida: {request.method} {request.url.path}")
-    response = await call_next(request)
-    return response
+# Removed verbose request logging for production.
+
 
 
 # Montar frontend al final para que sirva como fallback y maneje rutas relativas

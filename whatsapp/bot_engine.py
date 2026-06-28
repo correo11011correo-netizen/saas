@@ -149,7 +149,7 @@ class BotEngine:
                 )
                 session.commit()
                 # Actualizar variable local
-                session_data = session_data._asdict() 
+                session_data = dict(session_data)
                 session_data["bot_profile_id"] = bot_profile_id
 
         current_node_id = session_data["current_node_id"]
