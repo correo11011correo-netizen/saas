@@ -109,16 +109,43 @@ class WhatsappCommandHandler:
         is_active: bool,
     ) -> ServiceResponse:
         try:
-            session.execute(
+            logger.info(f"Toggling bot for {phone_number} to {is_active} (Tenant: {context.tenant_id})")
+            
+            # 1. Intentar actualizar la sesión existente
+            res = session.execute(
                 text(
                     "UPDATE whatsapp_sessions SET is_bot_active = :active WHERE phone_number = :phone AND tenant_id = :tid"
                 ),
                 {"active": is_active, "phone": phone_number, "tid": context.tenant_id},
             )
+            
+            # 2. Si no se actualizó ninguna fila, la sesión no existe. La creamos.
+            if res.rowcount == 0:
+                logger.info(f"No session found for {phone_number}, creating new session with state {is_active}")
+                
+                # Buscar un bot activo por defecto para asignar a la nueva sesión
+                bot_default = session.execute(
+                    text("SELECT id FROM bot_profiles WHERE tenant_id = :tid AND is_active = TRUE LIMIT 1"),
+                    {"tid": context.tenant_id},
+                ).mappings().first()
+                
+                bot_id = bot_default["id"] if bot_default else None
+                
+                session.execute(
+                    text(
+                        """
+                        INSERT INTO whatsapp_sessions (tenant_id, phone_number, bot_profile_id, is_bot_active, current_node_id)
+                        VALUES (:tid, :phone, :bid, :active, NULL)
+                        """
+                    ),
+                    {"tid": context.tenant_id, "phone": phone_number, "bid": bot_id, "active": is_active},
+                )
+            
             session.commit()
             return ServiceResponse.success_res(message="Bot status updated.")
         except Exception as e:
             session.rollback()
+            logger.error(f"Error toggling bot for {phone_number}: {str(e)}")
             return ServiceResponse.error_res(f"Error: {str(e)}", "TOGGLE_BOT_ERROR")
 
     @command(

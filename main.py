@@ -8,7 +8,13 @@ import uvicorn
 import os
 import uuid
 import json
+import logging
 
+# Configure global logging to ensure custom loggers print to stdout
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 # ... (keep imports and engine/SessionLocal as they are)
 
