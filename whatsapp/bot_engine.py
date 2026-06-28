@@ -339,40 +339,150 @@ class BotEngine:
         # --- MODO BÚSQUEDA O FALLBACK ---
 
         # Si estamos en modo búsqueda
-        if current_node_id == 'SEARCH_MODE':
-            logger.info(f"Ejecutando búsqueda de productos para {sender}: {text_message}")
+        if current_node_id == SEARCH_MODE_UUID:
+            logger.info(f"Procesando modo búsqueda para {sender}: {text_message}")
+            
+            # Obtener datos de sesión para ver si hay resultados pendientes de selección
+            session_info = (
+                session.execute(
+                    text("SELECT session_data FROM whatsapp_sessions WHERE phone_number = :phone AND tenant_id = :tid"),
+                    {"phone": sender, "tid": tenant_id},
+                ).mappings().first()
+            )
+            session_data = session_info["session_data"] if session_info and session_info["session_data"] else {}
+            search_results = session_data.get("search_results", [])
+
+            # --- FASE 2: SELECCIÓN DE PRODUCTO ---
+            if search_results:
+                if text_message.isdigit():
+                    idx = int(text_message) - 1
+                    if 0 <= idx < len(search_results):
+                        product_code = search_results[idx]
+                        product = (
+                            session.execute(
+                                text("SELECT * FROM products WHERE code = :code AND tenant_id = :tid"),
+                                {"code": product_code, "tid": tenant_id},
+                            ).mappings().first()
+                        )
+                        
+                        if product:
+                            status = "✅ En Stock" if product['quantity'] > 0 else "❌ Agotado"
+                            unit = "kg/un" if product['is_weight'] else "un"
+                            response_msg = (
+                                f"📦 *Detalle del Producto:*\n\n"
+                                f"Nombre: {product['name']}\n"
+                                f"Precio: ${product['price']}\n"
+                                f"Stock: {product['quantity']} {unit}\n"
+                                f"Categoría: {product['category'] or 'N/A'}\n"
+                                f"Código: {product['code']}\n"
+                                f"Estado: {status}\n\n"
+                                f"Para volver al menú, escribe 'Menú'."
+                            )
+                            self._send_immediate_response(session, tenant_id, sender, response_msg, active_bot_profile_id)
+                            
+                            # Limpiar resultados de búsqueda y volver al inicio
+                            session.execute(
+                                text("UPDATE whatsapp_sessions SET session_data = '{}' WHERE phone_number = :phone AND tenant_id = :tid"),
+                                {"phone": sender, "tid": tenant_id}
+                            )
+                            
+                            node_inicio = (
+                                session.execute(
+                                    text("SELECT id FROM bot_nodes WHERE name = 'inicio' AND tenant_id = :tid AND bot_profile_id = :bid"),
+                                    {"tid": tenant_id, "bid": active_bot_profile_id},
+                                ).mappings().first()
+                            )
+                            if node_inicio:
+                                session.execute(
+                                    text("UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid"),
+                                    {"nid": node_inicio["id"], "phone": sender, "tid": tenant_id}
+                                )
+                            session.commit()
+                            return
+                
+                # Si el usuario escribió algo que no es un número válido, reiniciamos la búsqueda con el nuevo texto
+                logger.info(f"Entrada inválida para selección, reiniciando búsqueda con: {text_message}")
+                # Continuamos al flujo de búsqueda normal (Fase 1)
+
+            # --- FASE 1: BÚSQUEDA EXHAUSTIVA ---
+            logger.info(f"Ejecutando búsqueda exhaustiva para {sender}: {text_message}")
             products = (
                 session.execute(
-                    text("SELECT name, price, quantity FROM products WHERE tenant_id = :tid AND name ILIKE :query"),
+                    text(
+                        "SELECT code, name, price, quantity, category FROM products "
+                        "WHERE tenant_id = :tid AND (name ILIKE :query OR category ILIKE :query OR code = :query)"
+                    ),
                     {"tid": tenant_id, "query": f"%{text_message}%"},
                 ).mappings().all()
             )
 
-            if products:
-                response_msg = "📦 *Productos encontrados:*\\n\\n"
-                for p in products:
-                    status = "✅ En Stock" if p['quantity'] > 0 else "❌ Agotado"
-                    response_msg += f"• {p['name']} - ${p['price']} ({status})\\n"
-                response_msg += "\\nPara volver al menú, escribe 'Menú'."
-            else:
-                response_msg = f"No encontré productos que coincidan con '{text_message}'. Intenta con otra palabra. 🔍"
-
-            self._send_immediate_response(session, tenant_id, sender, response_msg, active_bot_profile_id)
-            
-            # Volvemos al nodo anterior o al inicio después de la búsqueda
-            node_inicio = (
-                session.execute(
-                    text("SELECT id FROM bot_nodes WHERE name = 'inicio' AND tenant_id = :tid AND bot_profile_id = :bid"),
-                    {"tid": tenant_id, "bid": active_bot_profile_id},
-                ).mappings().first()
-            )
-            if node_inicio:
-                session.execute(
-                    text("UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid"),
-                    {"nid": node_inicio["id"], "phone": sender, "tid": tenant_id}
+            if not products:
+                response_msg = f"No encontré productos que coincidan con '{text_message}'. Intenta con otra palabra o código. 🔍"
+                self._send_immediate_response(session, tenant_id, sender, response_msg, active_bot_profile_id)
+                
+                # Volver al inicio
+                node_inicio = (
+                    session.execute(
+                        text("SELECT id FROM bot_nodes WHERE name = 'inicio' AND tenant_id = :tid AND bot_profile_id = :bid"),
+                        {"tid": tenant_id, "bid": active_bot_profile_id},
+                    ).mappings().first()
                 )
+                if node_inicio:
+                    session.execute(
+                        text("UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid"),
+                        {"nid": node_inicio["id"], "phone": sender, "tid": tenant_id}
+                    )
                 session.commit()
+                return
+
+            if len(products) == 1:
+                # Solo uno: mostrar detalle directo
+                p = products[0]
+                status = "✅ En Stock" if p['quantity'] > 0 else "❌ Agotado"
+                response_msg = (
+                    f"📦 *Producto encontrado:*\n\n"
+                    f"• {p['name']} - ${p['price']} ({status})\n"
+                    f"Categoría: {p['category'] or 'N/A'}\n"
+                    f"Código: {p['code']}\n\n"
+                    f"Para volver al menú, escribe 'Menú'."
+                )
+                self._send_immediate_response(session, tenant_id, sender, response_msg, active_bot_profile_id)
+                
+                # Volver al inicio
+                node_inicio = (
+                    session.execute(
+                        text("SELECT id FROM bot_nodes WHERE name = 'inicio' AND tenant_id = :tid AND bot_profile_id = :bid"),
+                        {"tid": tenant_id, "bid": active_bot_profile_id},
+                    ).mappings().first()
+                )
+                if node_inicio:
+                    session.execute(
+                        text("UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid"),
+                        {"nid": node_inicio["id"], "phone": sender, "tid": tenant_id}
+                    )
+                session.commit()
+                return
+
+            # Múltiples resultados: crear lista numerada y guardar en sesión
+            response_msg = "📦 *Se encontraron varios productos. Elige uno escribiendo el número:*\n\n"
+            product_codes = []
+            for i, p in enumerate(products, 1):
+                status = "✅" if p['quantity'] > 0 else "❌"
+                response_msg += f"{i}. {p['name']} - ${p['price']} {status}\n"
+                product_codes.append(p['code'])
+            
+            response_msg += "\nO escribe 'Menú' para volver."
+            
+            # Guardar códigos en session_data
+            session.execute(
+                text("UPDATE whatsapp_sessions SET session_data = :data WHERE phone_number = :phone AND tenant_id = :tid"),
+                {"data": json.dumps({"search_results": product_codes}), "phone": sender, "tid": tenant_id}
+            )
+            session.commit()
+            
+            self._send_immediate_response(session, tenant_id, sender, response_msg, active_bot_profile_id)
             return
+
 
         # --- FALLBACK FINAL (Búsqueda Predictiva) ---
         logger.info(f"No se encontró opción de menú para '{text_message}'. Intentando búsqueda predictiva...")
@@ -415,6 +525,12 @@ class BotEngine:
         # Importante: El dispatcher de whatsapp.send_text debe ser actualizado para usar bot_profile_id
         dispatcher.execute(
             "whatsapp.send_text",
+            {"to": sender, "body": body, "bot_profile_id": bot_profile_id},
+            context,
+        )
+t,
+        )
+        "whatsapp.send_text",
             {"to": sender, "body": body, "bot_profile_id": bot_profile_id},
             context,
         )

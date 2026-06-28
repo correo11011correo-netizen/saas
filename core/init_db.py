@@ -54,6 +54,9 @@ def init_db():
                     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tenants' AND column_name='plan') THEN
                         ALTER TABLE tenants ADD COLUMN plan VARCHAR(50) DEFAULT 'free';
                     END IF;
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='whatsapp_sessions' AND column_name='session_data') THEN
+                        ALTER TABLE whatsapp_sessions ADD COLUMN session_data JSONB DEFAULT '{}';
+                    END IF;
                 END $$;
                 """,
             )
