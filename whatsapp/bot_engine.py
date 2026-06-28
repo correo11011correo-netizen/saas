@@ -9,6 +9,9 @@ import json
 
 logger = logging.getLogger("OmniCore.BotEngine")
 
+# Constant UUID to represent the search state in whatsapp_sessions.current_node_id
+SEARCH_MODE_UUID = uuid.UUID('00000000-0000-0000-0000-000000000001')
+
 
 class BotEngine:
     def _get_bot_profile_for_credential(self, session: Session, tenant_id: str, phone_number_id: str) -> str:
