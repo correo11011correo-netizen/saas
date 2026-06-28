@@ -528,9 +528,3 @@ class BotEngine:
             {"to": sender, "body": body, "bot_profile_id": bot_profile_id},
             context,
         )
-t,
-        )
-        "whatsapp.send_text",
-            {"to": sender, "body": body, "bot_profile_id": bot_profile_id},
-            context,
-        )
