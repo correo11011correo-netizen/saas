@@ -160,10 +160,42 @@ def boot_app(context: TenantContext = Depends(get_current_context), db=Depends(g
 # --- AUTH ENDPOINTS ---
 
 
+@app.get("/auth/onboarding-status")
+def get_onboarding_status(context: TenantContext = Depends(get_current_context), db=Depends(get_db)):
+    """
+    Indica al usuario qué pasos le faltan para completar la configuración inicial.
+    """
+    # 1. Verificar credenciales de WhatsApp
+    creds = db.execute(
+        text("SELECT api_key FROM credentials WHERE tenant_id = :tid AND service_name = 'whatsapp'"),
+        {"tid": context.tenant_id},
+    ).mappings().first()
+    whatsapp_configured = bool(creds and creds["api_key"])
+
+    # 2. Verificar si hay productos cargados
+    products_count = db.execute(
+        text("SELECT count(*) as total FROM products WHERE tenant_id = :tid"),
+        {"tid": context.tenant_id},
+    ).scalar()
+    stock_loaded = (products_count or 0) > 0
+
+    return {
+        "status": "complete" if whatsapp_configured and stock_loaded else "incomplete",
+        "steps": {
+            "whatsapp_configured": whatsapp_configured,
+            "stock_loaded": stock_loaded,
+        },
+        "next_step": "Configure WhatsApp" if not whatsapp_configured else ("Load Stock" if not stock_loaded else "Ready")
+    }
+
+
 @app.post("/auth/register")
+
 def register(data: dict[str, Any], response: Response, db=Depends(get_db)):
-    # Data: {email, password, business_name}
-    res = auth_service.register(db, data["email"], data["password"], data["business_name"])
+    # Data: {email, password, business_name, plan}
+    res = auth_service.register(
+        db, data["email"], data["password"], data["business_name"], data.get("plan", "free")
+    )
     if not res["success"]:
         raise HTTPException(status_code=400, detail=res["error"])
 
