@@ -42,7 +42,6 @@ class StockSyncCommandHandler:
                 """
                 # Como no tenemos created_at en stock_movements explícitamente en el esquema actual (solo en la tabla general), 
                 # en una implementación real añadiríamos esa columna.
-                params = {"tid": context.tenant_id, "last_sync": last_// No puedo usar la variable aquí, la defino abajo.
                 params = {"tid": context.tenant_id, "last_sync": last_sync}
 
             result = session.execute(text(query), params).mappings().all()
