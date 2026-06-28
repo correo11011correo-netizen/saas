@@ -165,38 +165,6 @@ class AuthService:
                 },
             )
 
-            # Insert default frontend manifest entries
-            default_modules = ["stock", "whatsapp", "mercado-pago"]
-            for module_name in default_modules:
-                session.execute(
-                    text(
-                        "INSERT INTO frontend_manifest (tenant_id, module, version, assets, active) VALUES (:tid, :module, :version, :assets, true)"
-                    ),
-                    {
-                        "tid": tenant_id,
-                        "module": module_name,
-                        "version": "1.0",
-                        "assets": json.dumps({}),
-                    },
-                )
-            session.commit()
-            token = self.create_token(tenant_id, user_id, "admin", plan)
-            return {
-                "success": True,
-                "token": token,
-                "tenant_id": str(tenant_id),
-                "webhook_secret": webhook_secret,
-                "user": {
-                    "username": email,
-                    "business_name": business_name,
-                    "role": "admin",
-                    "plan": plan,
-                },
-            }
-        except Exception as e:
-            session.rollback()
-            return {"success": False, "error": str(e)}
-
     def authenticate(self, session: Session, email: str, password: str) -> dict | None:
         password_hash = hashlib.sha256(password.encode()).hexdigest()
         user = (
