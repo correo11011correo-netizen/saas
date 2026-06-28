@@ -35,6 +35,7 @@ class CommandDispatcher:
         self, command_name: str, params: Dict[str, Any], context: TenantContext
     ) -> Any:
         if command_name not in self.registry:
+            logger.warning(f"Command {command_name} not found in registry. Available commands: {list(self.registry.keys())}")
             return {
                 "success": False,
                 "error": f"Command {command_name} not found",

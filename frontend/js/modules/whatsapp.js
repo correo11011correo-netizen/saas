@@ -238,8 +238,12 @@ window.Whatsapp = {
 
     async toggleBotStatus(phoneNumber, isActive) {
         try {
-            await API.execute('whatsapp.toggle_bot', { phone_number: phoneNumber, is_active: isActive });
-            UI.toast(`Bot ${isActive ? 'activado' : 'desactivado'}`, 'success');
+            const res = await API.execute('whatsapp.toggle_bot', { phone_number: phoneNumber, is_active: isActive });
+            if (res && res.success) {
+                UI.toast(`Bot ${isActive ? 'activado' : 'desactivado'}`, 'success');
+            } else {
+                throw new Error(res?.error || 'Error al cambiar el estado del bot');
+            }
         } catch (e) {
             UI.toast(e.message, 'error');
         }
