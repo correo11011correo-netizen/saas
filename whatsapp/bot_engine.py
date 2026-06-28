@@ -330,8 +330,8 @@ class BotEngine:
                 if option["action"] == "search_products":
                     self._send_immediate_response(session, tenant_id, sender, "Por favor, escribe el nombre del producto que deseas buscar. 🔍", active_bot_profile_id)
                     session.execute(
-                        text("UPDATE whatsapp_sessions SET current_node_id = 'SEARCH_MODE' WHERE phone_number = :phone AND tenant_id = :tid"),
-                        {"phone": sender, "tid": tenant_id}
+                        text("UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid"),
+                        {"nid": SEARCH_MODE_UUID, "phone": sender, "tid": tenant_id}
                     )
                     session.commit()
                     return
@@ -525,6 +525,10 @@ class BotEngine:
         # Importante: El dispatcher de whatsapp.send_text debe ser actualizado para usar bot_profile_id
         dispatcher.execute(
             "whatsapp.send_text",
+            {"to": sender, "body": body, "bot_profile_id": bot_profile_id},
+            context,
+        )
+        "whatsapp.send_text",
             {"to": sender, "body": body, "bot_profile_id": bot_profile_id},
             context,
         )
