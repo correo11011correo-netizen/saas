@@ -374,18 +374,31 @@ class BotEngine:
                 session.commit()
             return
 
-        # Fallback: Repetir menú actual
-        node = (
+        # --- FALLBACK FINAL (Búsqueda Predictiva) ---
+        logger.info(f"No se encontró opción de menú para '{text_message}'. Intentando búsqueda predictiva...")
+        
+        products = (
             session.execute(
-                text("SELECT prompt FROM bot_nodes WHERE id = :nid AND tenant_id = :tid AND bot_profile_id = :bid"),
-                {"nid": current_node_id, "tid": tenant_id, "bid": active_bot_profile_id},
-            ).mappings().first()
+                text("SELECT name, price, quantity FROM products WHERE tenant_id = :tid AND name ILIKE :query"),
+                {"tid": tenant_id, "query": f"%{text_message}%"},
+            ).mappings().all()
         )
-        if node:
-            self._send_immediate_response(session, tenant_id, sender, node["prompt"], active_bot_profile_id)
-        else:
-            # Si no hay nodo, enviamos la bienvenida o un mensaje de error
-            self._send_immediate_response(session, tenant_id, sender, "Lo siento, no entiendo esa opción. Intenta escribir 'Hola' para reiniciar.", active_bot_profile_id)
+
+        if products:
+            response_msg = f"No entendí la opción, pero encontré estos productos que coinciden con '{text_message}':\\n\\n"
+            for p in products:
+                status = "✅ En Stock" if p['quantity'] > 0 else "❌ Agotado"
+                response_msg += f"• {p['name']} - ${p['price']} ({status})\\n"
+            response_msg += "\\nPara volver al menú, escribe 'Menú'."
+            self._send_immediate_response(session, tenant_id, sender, response_msg, active_bot_profile_id)
+            return
+
+        # Si nada funcionó, enviar fallback genérico
+        self._send_immediate_response(
+            session, tenant_id, sender, 
+            "Lo siento, no entendí tu mensaje. 😕\\n\\nSi quieres buscar un producto, escribe el nombre del producto directamente o escribe *Stock*.", 
+            active_bot_profile_id
+        )
 
     def _send_immediate_response(
         self, session, tenant_id, sender, body, bot_profile_id: str
