@@ -151,15 +151,20 @@ window.Whatsapp = {
             // ... (el resto del código original)
 
             if (!document.getElementById('messages-container')) {
+                const botSwitchHtml = (phoneNumber && phoneNumber !== 'unknown') 
+                    ? `
+                    <label class="switch">
+                        <input type="checkbox" id="bot-status-check" ${is_bot_active ? 'checked' : ''} onchange="Whatsapp.toggleBotStatus('${phoneNumber}', this.checked)">
+                        <span class="slider"></span>
+                    </label>` 
+                    : '';
+
                 UI.render('app-content', `
                     <div style="height: 100vh; display: flex; flex-direction: column;">
                         <div style="padding: 10px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center;">
                             <button class="btn" onclick="Whatsapp.render('messages')">← Volver</button>
                             <strong>${phoneNumber}</strong>
-                            <label class="switch">
-                                <input type="checkbox" id="bot-status-check" ${is_bot_active ? 'checked' : ''} onchange="Whatsapp.toggleBotStatus('${phoneNumber}', this.checked)">
-                                <span class="slider"></span>
-                            </label>
+                            ${botSwitchHtml}
                         </div>
                         <div id="messages-container" style="flex: 1; overflow-y: auto; padding: 10px; background: var(--color-bg);">
                         </div>
