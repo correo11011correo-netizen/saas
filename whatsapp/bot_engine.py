@@ -251,8 +251,8 @@ class BotEngine:
                     logger.info(f"Intención GLOBAL detectada: Stock para {sender}")
                     self._send_immediate_response(session, tenant_id, sender, "Por favor, escribe el nombre del producto que deseas buscar. 🔍", active_bot_profile_id)
                     session.execute(
-                        text("UPDATE whatsapp_sessions SET current_node_id = SEARCH_MODE_UUID WHERE phone_number = :phone AND tenant_id = :tid"),
-                        {"phone": sender, "tid": tenant_id}
+                        text("UPDATE whatsapp_sessions SET current_node_id = :nid WHERE phone_number = :phone AND tenant_id = :tid"),
+                        {"nid": SEARCH_MODE_UUID, "phone": sender, "tid": tenant_id}
                     )
                     session.commit()
                     return
@@ -527,6 +527,4 @@ class BotEngine:
             "whatsapp.send_text",
             {"to": sender, "body": body, "bot_profile_id": bot_profile_id},
             context,
-        )
-t,
         )
