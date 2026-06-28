@@ -89,8 +89,10 @@ class BotEngine:
         bot_profile_id = self._get_bot_profile_for_credential(session, tenant_id, phone_number_id)
         
         if not bot_profile_id:
-            logger.error(f"No se encontró un bot asignado para el phone_number_id {phone_number_id}")
+            logger.error(f"No se encontró un bot asignado para el phone_number_id {phone_number_id} (Tenant: {tenant_id})")
             return
+
+        logger.info(f"Bot perfil identificado: {bot_profile_id} para el sender {sender}")
 
         # 2. REGISTRAR MENSAJE ENTRANTE
         session.execute(
@@ -117,6 +119,7 @@ class BotEngine:
 
         is_first_message = False
         if not session_data:
+            logger.info(f"No se encontró sesión para {sender}, creando nueva sesión con bot {bot_profile_id}")
             is_first_message = True
             session.execute(
                 text(
@@ -141,8 +144,10 @@ class BotEngine:
                 .first()
             )
         else:
+            logger.info(f"Sesión encontrada para {sender}: is_bot_active={session_data['is_bot_active']}, bot_profile_id={session_data['bot_profile_id']}")
             # Actualizar el perfil de bot si el número ha sido reasignado
             if session_data["bot_profile_id"] != bot_profile_id:
+                logger.info(f"Reasignando bot en sesión para {sender}: {session_data['bot_profile_id']} -> {bot_profile_id}")
                 session.execute(
                     text("UPDATE whatsapp_sessions SET bot_profile_id = :bid WHERE phone_number = :phone AND tenant_id = :tid"),
                     {"bid": bot_profile_id, "phone": sender, "tid": tenant_id}
@@ -157,6 +162,7 @@ class BotEngine:
         is_bot_active = session_data.get("is_bot_active", True)
 
         if not is_bot_active:
+            logger.info(f"Bot desactivado para la sesión de {sender}. Ignorando mensaje.")
             return
 
         settings = self._get_settings(session, tenant_id, active_bot_profile_id)

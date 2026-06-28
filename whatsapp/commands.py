@@ -651,6 +651,7 @@ class BotManagerCommandHandler:
         self, session: Session, context: TenantContext, credential_id: str, bot_profile_id: str
     ) -> ServiceResponse:
         try:
+            logger.info(f"Assigning bot {bot_profile_id} to credential {credential_id} (Tenant: {context.tenant_id})")
             session.execute(
                 text(
                     """
@@ -666,6 +667,7 @@ class BotManagerCommandHandler:
             return ServiceResponse.success_res(message="Bot assigned to credential successfully.")
         except Exception as e:
             session.rollback()
+            logger.error(f"Error assigning bot {bot_profile_id} to {credential_id}: {str(e)}")
             return ServiceResponse.error_res(f"Error assigning bot: {str(e)}", "BOT_ASSIGN_ERROR")
 
     @command(
