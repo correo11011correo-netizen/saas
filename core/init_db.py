@@ -310,10 +310,28 @@ def init_db():
                 """,
             )
 
+            # --- CRM: Customer Management ---
+            run_query(
+                cur,
+                """
+                CREATE TABLE IF NOT EXISTS customers (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    tenant_id UUID REFERENCES tenants(id),
+                    phone_number VARCHAR(50) NOT NULL,
+                    full_name VARCHAR(255),
+                    email VARCHAR(255),
+                    metadata JSONB DEFAULT '{}',
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (tenant_id, phone_number)
+                );
+                """,
+            )
+
             # 4. Business Tables - Multi-tenancy adaptation
             business_schemas = {
                 "sales": [
                     "cliente VARCHAR(255)",
+                    "customer_id UUID REFERENCES customers(id)",
                     "total DECIMAL(12,2)",
                     "metodo_pago VARCHAR(50)",
                     "paga_con DECIMAL(12,2)",

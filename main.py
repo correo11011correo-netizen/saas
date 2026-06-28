@@ -11,14 +11,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from core.auth import auth_service
+from core.auth import auth_service
 from core.billing import billing_commands
 from core.commands import core_commands
 from core.context import TenantContext
 from core.credentials import credentials_commands
+from core.crm_commands import crm_commands
 from core.dispatcher import dispatcher
 from core.saas_admin import saas_admin_commands
-from core.webhooks import router as webhook_router
-from core.webhooks import set_db_session_factory
+from core.webhooks import router as webhook_router, set_db_session_factory
 from employees.commands import employee_commands
 from sales.commands import sales_commands
 from stock.commands import stock_commands
@@ -61,6 +62,7 @@ async def lifespan(app: FastAPI):
     dispatcher.register_handler(employee_commands)
     dispatcher.register_handler(saas_admin_commands)
     dispatcher.register_handler(billing_commands)
+    dispatcher.register_handler(crm_commands)
 
     # Inject DB factory into Webhooks AND Dispatcher
     set_db_session_factory(SessionLocal)

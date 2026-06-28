@@ -13,9 +13,96 @@ if not BASE_URL:
     raise Exception("BASE_URL environment variable is required for Mercado Pago notifications")
 
 
-class SalesCommandHandler:
+    @command(
+        name="sales.cobrar",
+        description="Processes a sale, updates stock and registers the payment.",
+        params_model={
+            "customer_phone": "string",
+            "items": "list",
+            "paga_con": "decimal",
+        },
+    )
+    def cobrar(
+        self, session: Session, context: TenantContext, customer_phone: str, items: list[dict], paga_con: float
+    ) -> ServiceResponse:
+        try:
+            # 1. Validar stock y calcular total
+            total = 0.0
+            processed_items = []
+            for item in items:
+                product = session.execute(
+                    text("SELECT price, quantity FROM products WHERE code = :code AND tenant_id = :tid"),
+                    {"code": item["code"], "tid": context.tenant_id},
+                ).mappings().first()
+
+                if not product:
+                    return ServiceResponse.error_res(f"Product {item['code']} not found", "PRODUCT_NOT_FOUND")
+                if product["quantity"] < item["quantity"]:
+                    return ServiceResponse.error_res(f"Insufficient stock for {item['code']}", "INSUFFICIENT_STOCK")
+
+                subtotal = float(product["price"]) * item["quantity"]
+                total += subtotal
+                processed_items.append({
+                    "code": item["code"],
+                    "quantity": item["quantity"],
+                    "price": product["price"],
+                    "subtotal": subtotal,
+                })
+
+            # 2. INTEGRACIÓN CRM: Obtener o crear el cliente
+            from core.crm_commands import crm_commands
+            customer_res = crm_commands.create_or_update_customer(
+                session, context, phone_number=customer_phone
+            )
+            if not customer_res.success:
+                return ServiceResponse.error_res(f"CRM Error: {customer_res.error}", "CRM_ERROR")
+            customer_id = customer_res.data["customer_id"]
+
+            # 3. Registrar la venta
+            vuelto = paga_con - total
+            if vuelto < 0:
+                return ServiceResponse.error_res(f"Payment insufficient. Total: {total}, Paid: {paga_con}", "INSUFFICIENT_PAYMENT")
+
+            sale_id = uuid.uuid4()
+            session.execute(
+                text(
+                    "INSERT INTO sales (id, tenant_id, cliente, customer_id, total, metodo_pago, paga_con, vuelto) "
+                    "VALUES (:id, :tid, :cliente, :cid, :total, 'efectivo', :paga, :vuelto)"
+                ),
+                {
+                    "id": sale_id,
+                    "tid": context.tenant_id,
+                    "cliente": customer_phone,
+                    "cid": customer_id,
+                    "total": total,
+                    "paga": paga_con,
+                    "vuelto": vuelto,
+                },
+            )
+
+            # 4. Registrar items y descontar stock
+            for pi in processed_items:
+                session.execute(
+                    text("INSERT INTO sale_items (id, tenant_id, sale_id, product_code, quantity, price, subtotal) VALUES (:id, :tid, :sid, :code, :qty, :price, :sub)"),
+                    {"id": uuid.uuid4(), "tid": context.tenant_id, "sid": sale_id, "code": pi["code"], "qty": pi["quantity"], "price": pi["price"], "sub": pi["subtotal"]},
+                )
+                session.execute(
+                    text("UPDATE products SET quantity = quantity - :qty WHERE code = :code AND tenant_id = :tid"),
+                    {"qty": pi["quantity"], "code": pi["code"], "tid": context.tenant_id},
+                )
+
+            session.commit()
+            return ServiceResponse.success_res(
+                data={"sale_id": str(sale_id), "total": total, "vuelto": vuelto},
+                message="Sale processed successfully."
+            )
+        except Exception as e:
+            session.rollback()
+            return ServiceResponse.error_res(str(e), "SALES_COBRAR_ERROR")
+
     @command(
         name="sales.create",
+
         description="Creates a sales order and generates a Mercado Pago payment link.",
         params_model={
             "items": "list",
