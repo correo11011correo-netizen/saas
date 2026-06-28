@@ -1,7 +1,7 @@
-import psycopg2
-from psycopg2 import sql
 import logging
 import os
+
+import psycopg2
 
 # Configuration
 DB_URL = os.getenv("DATABASE_URL")
@@ -176,7 +176,6 @@ def init_db():
                     name VARCHAR(255) NOT NULL,
                     base_plan VARCHAR(50) DEFAULT 'free', -- 'free', 'pro', 'enterprise'
                     is_custom BOOLEAN DEFAULT false,
-                    created_// I will use a larger context for replace.
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
                 """,
