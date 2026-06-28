@@ -159,15 +159,13 @@ class BotEngine:
 
         current_node_id = session_data["current_node_id"]
         active_bot_profile_id = session_data["bot_profile_id"]
-        is_bot_active = session_data.get("is_bot_active", True)
-
-        if not is_bot_active:
-            logger.info(f"Bot desactivado para la sesión de {sender}. Ignorando mensaje.")
-            return
 
         settings = self._get_settings(session, tenant_id, active_bot_profile_id)
 
         if not settings.get("is_global_active", True):
+            logger.info(f"Bot globalmente desactivado para {active_bot_profile_id}. Enviando mensaje de handoff.")
+            self._send_immediate_response(session, tenant_id, sender, settings["handoff_message"], active_bot_profile_id)
+            return
             self._send_immediate_response(session, tenant_id, sender, settings["handoff_message"], active_bot_profile_id)
             return
 

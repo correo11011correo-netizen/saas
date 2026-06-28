@@ -586,7 +586,7 @@ class BotManagerCommandHandler:
             # 1. Create the Bot Profile
             res = session.execute(
                 text(
-                    "INSERT INTO bot_profiles (tenant_id, name, capabilities) VALUES (:tid, :name, :caps) RETURNING id"
+                    "INSERT INTO bot_profiles (tenant_id, name, capabilities, is_active) VALUES (:tid, :name, :caps, TRUE) RETURNING id"
                 ),
                 {"tid": context.tenant_id, "name": name, "caps": json.dumps({"functions": functions})},
             )
