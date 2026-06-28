@@ -1,12 +1,12 @@
 import logging
-from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from core.types import ServiceResponse
-from core.decorators import command
 from core.context import TenantContext
+from core.decorators import command
+from core.types import ServiceResponse
 
 logger = logging.getLogger("OmniCore.StockCommands")
 
@@ -16,12 +16,12 @@ class ProductImportItem(BaseModel):
     name: str = Field(..., description="Name of the product")
     price: float = Field(..., gt=0, description="Unit price must be positive")
     quantity: int = Field(..., ge=0, description="Initial quantity")
-    category: Optional[str] = Field(None, description="Product category")
+    category: str | None = Field(None, description="Product category")
     is_weight: bool = Field(False, description="Whether the product is sold by weight")
 
 
 class StockImportModel(BaseModel):
-    products: List[ProductImportItem] = Field(
+    products: list[ProductImportItem] = Field(
         ..., min_length=1, description="List of products to import"
     )
 
@@ -45,9 +45,7 @@ class StockCommandHandler:
         try:
             result = (
                 session.execute(
-                    text(
-                        "SELECT * FROM products WHERE tenant_id = :tid ORDER BY name ASC"
-                    ),
+                    text("SELECT * FROM products WHERE tenant_id = :tid ORDER BY name ASC"),
                     {"tid": context.tenant_id},
                 )
                 .mappings()
@@ -82,7 +80,7 @@ class StockCommandHandler:
         name: str,
         price: float,
         quantity: int,
-        category: Optional[str] = None,
+        category: str | None = None,
         is_weight: bool = False,
     ) -> ServiceResponse:
         try:
@@ -122,14 +120,10 @@ class StockCommandHandler:
             )
 
             session.commit()
-            return ServiceResponse.success_res(
-                message=f"Product {name} processed successfully."
-            )
+            return ServiceResponse.success_res(message=f"Product {name} processed successfully.")
         except Exception as e:
             session.rollback()
-            return ServiceResponse.error_res(
-                f"Error adding product: {str(e)}", "STOCK_ADD_ERROR"
-            )
+            return ServiceResponse.error_res(f"Error adding product: {str(e)}", "STOCK_ADD_ERROR")
 
     @command(
         name="stock.update",
@@ -158,21 +152,15 @@ class StockCommandHandler:
             )
 
             if not result:
-                return ServiceResponse.error_res(
-                    f"Product {code} not found", "PRODUCT_NOT_FOUND"
-                )
+                return ServiceResponse.error_res(f"Product {code} not found", "PRODUCT_NOT_FOUND")
 
             new_qty = result["quantity"] + quantity
             if new_qty < 0:
-                return ServiceResponse.error_res(
-                    "Insufficient stock", "STOCK_INSUFFICIENT"
-                )
+                return ServiceResponse.error_res("Insufficient stock", "STOCK_INSUFFICIENT")
 
             # Update quantity
             session.execute(
-                text(
-                    "UPDATE products SET quantity = :qty WHERE code = :code AND tenant_id = :tid"
-                ),
+                text("UPDATE products SET quantity = :qty WHERE code = :code AND tenant_id = :tid"),
                 {"qty": new_qty, "code": code, "tid": context.tenant_id},
             )
 
@@ -206,15 +194,11 @@ class StockCommandHandler:
         description="Retrieves product data for the current tenant.",
         params_model={"code": "string"},
     )
-    def get_product(
-        self, session: Session, context: TenantContext, code: str
-    ) -> ServiceResponse:
+    def get_product(self, session: Session, context: TenantContext, code: str) -> ServiceResponse:
         try:
             result = (
                 session.execute(
-                    text(
-                        "SELECT * FROM products WHERE code = :code AND tenant_id = :tid"
-                    ),
+                    text("SELECT * FROM products WHERE code = :code AND tenant_id = :tid"),
                     {"code": code, "tid": context.tenant_id},
                 )
                 .mappings()
@@ -222,16 +206,10 @@ class StockCommandHandler:
             )
 
             if not result:
-                return ServiceResponse.error_res(
-                    f"Product {code} not found", "PRODUCT_NOT_FOUND"
-                )
-            return ServiceResponse.success_res(
-                data=dict(result), message="Product retrieved."
-            )
+                return ServiceResponse.error_res(f"Product {code} not found", "PRODUCT_NOT_FOUND")
+            return ServiceResponse.success_res(data=dict(result), message="Product retrieved.")
         except Exception as e:
-            return ServiceResponse.error_res(
-                f"Error fetching product: {str(e)}", "STOCK_GET_ERROR"
-            )
+            return ServiceResponse.error_res(f"Error fetching product: {str(e)}", "STOCK_GET_ERROR")
 
 
 stock_commands = StockCommandHandler()

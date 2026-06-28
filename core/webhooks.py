@@ -1,10 +1,12 @@
 import logging
-from typing import Any, Dict
-from fastapi import APIRouter, Request, BackgroundTasks, HTTPException, Depends
+import os
+from typing import Any
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy import text
-from core.dispatcher import dispatcher
-from core.types import ServiceResponse
+
 from core.db import get_db
+from core.dispatcher import dispatcher
 
 router = APIRouter()
 logger = logging.getLogger("OmniCore.Webhooks")
@@ -19,7 +21,7 @@ def set_db_session_factory(factory):
     db_session_factory = factory
 
 
-async def get_tenant_by_secret(secret: str) -> Dict[str, Any]:
+async def get_tenant_by_secret(secret: str) -> dict[str, Any]:
     """Look up tenant by webhook_secret."""
     with db_session_factory() as session:
         result = (
@@ -40,7 +42,7 @@ async def verify_webhook(secret: str, service: str, request: Request):
     """
     Handles Meta's handshake (GET request).
     """
-    logger.info(f"--- Handshake Inicio ---")
+    logger.info("--- Handshake Inicio ---")
     logger.info(f"Secret en URL: {secret}")
     logger.info(f"Params: {request.query_params}")
 
@@ -63,16 +65,12 @@ async def verify_webhook(secret: str, service: str, request: Request):
         logger.info("Handshake exitoso. Enviando challenge.")
         return int(params.get("hub.challenge"))
 
-    logger.warning(
-        f"Handshake fallido. Token enviado: {hub_token}, Token esperado: {secret}"
-    )
+    logger.warning(f"Handshake fallido. Token enviado: {hub_token}, Token esperado: {secret}")
     raise HTTPException(status_code=403, detail="Verification failed")
 
 
 @router.post("/hooks/{secret}/whatsapp")
-async def handle_whatsapp_webhook(
-    secret: str, request: Request, background_tasks: BackgroundTasks
-):
+async def handle_whatsapp_webhook(secret: str, request: Request, background_tasks: BackgroundTasks):
     """
     Handles WhatsApp message events (POST request).
     """
@@ -115,14 +113,15 @@ async def handle_mp_ipn(request: Request, db=Depends(get_db)):
     # 1. Verify Payment Event
     if payload.get("type") == "payment":
         payment_id = payload.get("data", {}).get("id")
-        
+
         # Para validar el pago, necesitamos obtener los detalles desde la API de MP
         # En un entorno real, aquí llamaríamos al SDK de MP para confirmar el estado 'approved'
-        
+
         # 2. Find the Sale ID from the payment details
         # Dado que MP envía la notificación, necesitamos recuperar la 'external_reference'
         # que es nuestro sale_id.
         import mercadopago
+
         # Obtenemos la API Key de MP del tenant (simplificado: usamos la primera encontrada o una config global)
         # Idealmente, buscaríamos el tenant asociado al pago.
         try:
@@ -130,11 +129,11 @@ async def handle_mp_ipn(request: Request, db=Depends(get_db)):
             # Para esto necesitamos el tenant_id de la orden y su API Key
             with db_session_factory() as session:
                 # Primero buscamos la orden para saber a qué tenant pertenece
-                # Como el IPN solo nos da el payment_id, primero consultamos MP con una key temporal o general 
+                # Como el IPN solo nos da el payment_id, primero consultamos MP con una key temporal o general
                 # para obtener el external_reference, LUEGO buscamos el tenant.
                 # Pero para ser estrictos, usaremos la MP_API_KEY global solo para el primer salto.
-                
-                sdk = mercadopago.SDK(os.getenv("MP_API_KEY", "")) 
+
+                sdk = mercadopago.SDK(os.getenv("MP_API_KEY", ""))
                 payment_info = sdk.payment().get(payment_id)
                 sale_id = payment_info["response"].get("external_reference")
                 status = payment_info["response"].get("status")
@@ -145,35 +144,36 @@ async def handle_mp_ipn(request: Request, db=Depends(get_db)):
 
                 if status == "approved":
                     logger.info(f"Payment approved for sale {sale_id}. Triggering confirmation.")
-                    
+
                     # Ahora buscamos el tenant y su credencial específica
-                    order = session.execute(
-                        text("SELECT tenant_id FROM sales_orders WHERE id = :id"),
-                        {"id": sale_id}
-                    ).mappings().first()
-                    
+                    order = (
+                        session.execute(
+                            text("SELECT tenant_id FROM sales_orders WHERE id = :id"),
+                            {"id": sale_id},
+                        )
+                        .mappings()
+                        .first()
+                    )
+
                     if not order:
                         logger.error(f"Order {sale_id} not found in database")
                         return {"status": "order_not_found"}
-                    
-                    tenant_id = order['tenant_id']
-                    
+
+                    tenant_id = order["tenant_id"]
+
                     # Usamos el dispatcher con el contexto del tenant
-                    from core.context import TenantContext
                     import uuid
-                    
+
+                    from core.context import TenantContext
+
                     ctx = TenantContext(
                         tenant_id=tenant_id,
-                        user_id=uuid.UUID('00000000-0000-0000-0000-000000000000'),
-                        role='system',
-                        plan='pro'
+                        user_id=uuid.UUID("00000000-0000-0000-0000-000000000000"),
+                        role="system",
+                        plan="pro",
                     )
-                    
-                    dispatcher.execute(
-                        "sales.confirm_payment", 
-                        {"sale_id": sale_id}, 
-                        ctx
-                    )
+
+                    dispatcher.execute("sales.confirm_payment", {"sale_id": sale_id}, ctx)
                     logger.info(f"Sale {sale_id} confirmed and stock updated.")
 
         except Exception as e:
@@ -186,7 +186,7 @@ async def handle_mp_ipn(request: Request, db=Depends(get_db)):
 
 
 async def process_webhook_event(
-    session_factory, tenant_id: str, event_type: str, payload: Dict[str, Any]
+    session_factory, tenant_id: str, event_type: str, payload: dict[str, Any]
 ):
     """
     Orchestrates the event by mapping it to a system command.
@@ -207,14 +207,16 @@ async def process_webhook_event(
 
                 msg_data = messages[0]
                 sender = msg_data.get("from")
-                
+
                 # Extraer phone_number_id del payload de Meta
                 phone_number_id_from_meta = value.get("metadata", {}).get("phone_number_id")
                 if not phone_number_id_from_meta:
                     logger.error(f"No se encontró phone_number_id en el payload de Meta: {payload}")
                     return
-                
-                logger.info(f"Mensaje de WhatsApp recibido para phone_number_id: {phone_number_id_from_meta}")
+
+                logger.info(
+                    f"Mensaje de WhatsApp recibido para phone_number_id: {phone_number_id_from_meta}"
+                )
 
                 msg_type = msg_data.get("type", "text")
                 if msg_type == "text":
@@ -235,5 +237,7 @@ async def process_webhook_event(
                 logger.error(f"Payload: {payload}")
                 return
         else:
-            logger.warning(f"Unhandled event type: {event_type}") # Cambiado 'secret' a 'event_type'
+            logger.warning(
+                f"Unhandled event type: {event_type}"
+            )  # Cambiado 'secret' a 'event_type'
             return

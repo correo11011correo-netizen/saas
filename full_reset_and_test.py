@@ -1,13 +1,13 @@
-import psycopg2
-from psycopg2 import sql
 import logging
-import requests
-import json
 import os
-from sqlalchemy import create_engine, text
+
+import psycopg2
+import requests
 
 # --- CONFIGURACIÓN ---
-DB_URL = "postgresql://postgres:TFralZyHIJnjyZrNMtoDqqtUlPTsttvT@thomas.proxy.rlwy.net:24031/railway"
+DB_URL = (
+    "postgresql://postgres:TFralZyHIJnjyZrNMtoDqqtUlPTsttvT@thomas.proxy.rlwy.net:24031/railway"
+)
 API_URL = os.getenv("BASE_URL", "https://saas-production-2dd6.up.railway.app")
 
 logging.basicConfig(level=logging.INFO)
@@ -82,13 +82,11 @@ def test_user_creation():
         if response.status_code == 200:
             data = response.json()
             logger.info("""✅ Usuario creado exitosamente!""")
-            logger.info(f"""   - Tenant ID: {data.get('tenant_id')}""")
-            logger.info(f"""   - Webhook Secret: {data.get('webhook_secret')}""")
+            logger.info(f"""   - Tenant ID: {data.get("tenant_id")}""")
+            logger.info(f"""   - Webhook Secret: {data.get("webhook_secret")}""")
             return True
         else:
-            logger.error(
-                f"""❌ Error al crear usuario: {response.status_code} - {response.text}"""
-            )
+            logger.error(f"""❌ Error al crear usuario: {response.status_code} - {response.text}""")
             return False
     except Exception as e:
         logger.error(f"""❌ Error de conexión con la API: {e}""")

@@ -1,11 +1,12 @@
+import json
 import logging
-from typing import Any, Dict, List
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from core.types import ServiceResponse
-from core.decorators import command
 from core.context import TenantContext
+from core.decorators import command
+from core.types import ServiceResponse
 
 logger = logging.getLogger("OmniCore.WhatsappCommands")
 
@@ -32,9 +33,7 @@ class WhatsappCommandHandler:
                 .all()
             )
             if not result:
-                return ServiceResponse.error_res(
-                    "Bot settings not found", "SETTINGS_NOT_FOUND"
-                )
+                return ServiceResponse.error_res("Bot settings not found", "SETTINGS_NOT_FOUND")
 
             return ServiceResponse.success_res(
                 data=[dict(row) for row in result], message="Settings retrieved."
@@ -79,22 +78,16 @@ class WhatsappCommandHandler:
                     values[key] = params[key]
 
             if not update_fields:
-                return ServiceResponse.error_res(
-                    "No fields to update", "NO_FIELDS_ERROR"
-                )
+                return ServiceResponse.error_res("No fields to update", "NO_FIELDS_ERROR")
 
             query = f"UPDATE bot_settings SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = :tid AND bot_profile_id = :bid"
             session.execute(text(query), values)
             session.commit()
 
-            return ServiceResponse.success_res(
-                message="Bot settings updated successfully."
-            )
+            return ServiceResponse.success_res(message="Bot settings updated successfully.")
         except Exception as e:
             session.rollback()
-            return ServiceResponse.error_res(
-                f"Error: {str(e)}", "UPDATE_SETTINGS_ERROR"
-            )
+            return ServiceResponse.error_res(f"Error: {str(e)}", "UPDATE_SETTINGS_ERROR")
 
     @command(
         name="whatsapp.toggle_bot",
@@ -109,8 +102,10 @@ class WhatsappCommandHandler:
         is_active: bool,
     ) -> ServiceResponse:
         try:
-            logger.info(f"Toggling bot for {phone_number} to {is_active} (Tenant: {context.tenant_id})")
-            
+            logger.info(
+                f"Toggling bot for {phone_number} to {is_active} (Tenant: {context.tenant_id})"
+            )
+
             # 1. Intentar actualizar la sesión existente
             res = session.execute(
                 text(
@@ -118,19 +113,27 @@ class WhatsappCommandHandler:
                 ),
                 {"active": is_active, "phone": phone_number, "tid": context.tenant_id},
             )
-            
+
             # 2. Si no se actualizó ninguna fila, la sesión no existe. La creamos.
             if res.rowcount == 0:
-                logger.info(f"No session found for {phone_number}, creating new session with state {is_active}")
-                
+                logger.info(
+                    f"No session found for {phone_number}, creating new session with state {is_active}"
+                )
+
                 # Buscar un bot activo por defecto para asignar a la nueva sesión
-                bot_default = session.execute(
-                    text("SELECT id FROM bot_profiles WHERE tenant_id = :tid AND is_active = TRUE LIMIT 1"),
-                    {"tid": context.tenant_id},
-                ).mappings().first()
-                
+                bot_default = (
+                    session.execute(
+                        text(
+                            "SELECT id FROM bot_profiles WHERE tenant_id = :tid AND is_active = TRUE LIMIT 1"
+                        ),
+                        {"tid": context.tenant_id},
+                    )
+                    .mappings()
+                    .first()
+                )
+
                 bot_id = bot_default["id"] if bot_default else None
-                
+
                 session.execute(
                     text(
                         """
@@ -138,9 +141,14 @@ class WhatsappCommandHandler:
                         VALUES (:tid, :phone, :bid, :active, NULL)
                         """
                     ),
-                    {"tid": context.tenant_id, "phone": phone_number, "bid": bot_id, "active": is_active},
+                    {
+                        "tid": context.tenant_id,
+                        "phone": phone_number,
+                        "bid": bot_id,
+                        "active": is_active,
+                    },
                 )
-            
+
             session.commit()
             return ServiceResponse.success_res(message="Bot status updated.")
         except Exception as e:
@@ -208,9 +216,7 @@ class WhatsappCommandHandler:
             )
 
             session.commit()
-            return ServiceResponse.success_res(
-                message="Conversation deleted successfully."
-            )
+            return ServiceResponse.success_res(message="Conversation deleted successfully.")
         except Exception as e:
             session.rollback()
             return ServiceResponse.error_res(
@@ -248,9 +254,7 @@ class WhatsappCommandHandler:
         description="Lists recent WhatsApp conversations.",
         params_model={},
     )
-    def list_conversations(
-        self, session: Session, context: TenantContext
-    ) -> ServiceResponse:
+    def list_conversations(self, session: Session, context: TenantContext) -> ServiceResponse:
         try:
             result = (
                 session.execute(
@@ -384,22 +388,30 @@ class WhatsappCommandHandler:
         try:
             # 0. Si no se proporciona bot_profile_id, intentar obtenerlo de la sesión
             if not bot_profile_id:
-                session_data = session.execute(
-                    text("SELECT bot_profile_id FROM whatsapp_sessions WHERE phone_number = :phone AND tenant_id = :tid LIMIT 1"),
-                    {"phone": to, "tid": context.tenant_id}
-                ).mappings().first()
+                session_data = (
+                    session.execute(
+                        text(
+                            "SELECT bot_profile_id FROM whatsapp_sessions WHERE phone_number = :phone AND tenant_id = :tid LIMIT 1"
+                        ),
+                        {"phone": to, "tid": context.tenant_id},
+                    )
+                    .mappings()
+                    .first()
+                )
                 if session_data:
-                    bot_profile_id = session_data['bot_profile_id']
-            
+                    bot_profile_id = session_data["bot_profile_id"]
+
             if not bot_profile_id:
-                return ServiceResponse.error_res("No bot profile associated with this session/request", "BOT_PROFILE_MISSING")
+                return ServiceResponse.error_res(
+                    "No bot profile associated with this session/request", "BOT_PROFILE_MISSING"
+                )
 
             # Buscamos la credencial asociada al bot_profile_id actual para este tenant
             cred_info = (
                 session.execute(
                     text(
                         """
-                        SELECT c.api_key, c.metadata 
+                        SELECT c.api_key, c.metadata
                         FROM credentials c
                         JOIN bot_assignments ba ON c.id = ba.credential_id
                         WHERE ba.bot_profile_id = :bid AND c.tenant_id = :tid
@@ -413,10 +425,14 @@ class WhatsappCommandHandler:
             )
 
             if not cred_info:
-                logger.info(f"No specific credential for bot profile {bot_profile_id}, searching fallback for tenant {context.tenant_id}")
+                logger.info(
+                    f"No specific credential for bot profile {bot_profile_id}, searching fallback for tenant {context.tenant_id}"
+                )
                 cred_info = (
                     session.execute(
-                        text("SELECT api_key, metadata FROM credentials WHERE service_name = 'whatsapp' AND tenant_id = :tid LIMIT 1"),
+                        text(
+                            "SELECT api_key, metadata FROM credentials WHERE service_name = 'whatsapp' AND tenant_id = :tid LIMIT 1"
+                        ),
                         {"tid": context.tenant_id},
                     )
                     .mappings()
@@ -430,11 +446,12 @@ class WhatsappCommandHandler:
                 )
 
             import json
+
             if isinstance(cred_info["metadata"], dict):
                 meta = cred_info["metadata"]
             else:
                 meta = json.loads(cred_info["metadata"])
-            
+
             phone_number_id = meta.get("phone_number_id")
 
             if not phone_number_id:
@@ -443,6 +460,7 @@ class WhatsappCommandHandler:
                 )
 
             import requests
+
             url = f"https://graph.facebook.com/v19.0/{phone_number_id}/messages"
             headers = {
                 "Authorization": f"Bearer {cred_info['api_key']}",
@@ -482,9 +500,7 @@ class WhatsappCommandHandler:
             )
         except Exception as e:
             session.rollback()
-            return ServiceResponse.error_res(
-                f"Delivery failed: {str(e)}", "DELIVERY_ERROR"
-            )
+            return ServiceResponse.error_res(f"Delivery failed: {str(e)}", "DELIVERY_ERROR")
 
     @command(
         name="whatsapp.list_credentials",
@@ -512,7 +528,9 @@ class WhatsappCommandHandler:
                 data=[dict(row) for row in result], message="Credentials listed successfully."
             )
         except Exception as e:
-            return ServiceResponse.error_res(f"Error listing credentials: {str(e)}", "LIST_CREDS_ERROR")
+            return ServiceResponse.error_res(
+                f"Error listing credentials: {str(e)}", "LIST_CREDS_ERROR"
+            )
 
     @command(
         name="bot.navigate",
@@ -544,18 +562,16 @@ class WhatsappCommandHandler:
             )
 
             if not result:
-                return ServiceResponse.error_res(
-                    f"Menu {menu_name} not found", "MENU_NOT_FOUND"
-                )
+                return ServiceResponse.error_res(f"Menu {menu_name} not found", "MENU_NOT_FOUND")
 
             import json
+
             options = result["options"]
             if isinstance(options, str):
                 options = json.loads(options)
 
             options_list = [
-                f"{i+1}. {opt.get('label', 'Sin etiqueta')}"
-                for i, opt in enumerate(options)
+                f"{i + 1}. {opt.get('label', 'Sin etiqueta')}" for i, opt in enumerate(options)
             ]
             full_text = f"{result['prompt']}\n\n{chr(10).join(options_list)}"
 
@@ -566,11 +582,11 @@ class WhatsappCommandHandler:
             return ServiceResponse.error_res(f"Navigation error: {str(e)}", "NAV_ERROR")
 
 
-
 class BotManagerCommandHandler:
     """
     Gestión de perfiles de bots especializados.
     """
+
     @command(
         name="bot.create",
         description="Creates a specialized bot 'employee' with specific functions and a dynamic menu.",
@@ -588,7 +604,11 @@ class BotManagerCommandHandler:
                 text(
                     "INSERT INTO bot_profiles (tenant_id, name, capabilities, is_active) VALUES (:tid, :name, :caps, TRUE) RETURNING id"
                 ),
-                {"tid": context.tenant_id, "name": name, "caps": json.dumps({"functions": functions})},
+                {
+                    "tid": context.tenant_id,
+                    "name": name,
+                    "caps": json.dumps({"functions": functions}),
+                },
             )
             bot_id = res.scalar()
 
@@ -664,10 +684,14 @@ class BotManagerCommandHandler:
             )
 
             session.commit()
-            return ServiceResponse.success_res(message=f"Bot employee '{name}' created with {len(functions)} functions.")
+            return ServiceResponse.success_res(
+                message=f"Bot employee '{name}' created with {len(functions)} functions."
+            )
         except Exception as e:
             session.rollback()
-            return ServiceResponse.error_res(f"Error creating bot employee: {str(e)}", "BOT_CREATE_ERROR")
+            return ServiceResponse.error_res(
+                f"Error creating bot employee: {str(e)}", "BOT_CREATE_ERROR"
+            )
 
     @command(
         name="bot.assign",
@@ -678,7 +702,9 @@ class BotManagerCommandHandler:
         self, session: Session, context: TenantContext, credential_id: str, bot_profile_id: str
     ) -> ServiceResponse:
         try:
-            logger.info(f"Assigning bot {bot_profile_id} to credential {credential_id} (Tenant: {context.tenant_id})")
+            logger.info(
+                f"Assigning bot {bot_profile_id} to credential {credential_id} (Tenant: {context.tenant_id})"
+            )
             session.execute(
                 text(
                     """
@@ -704,11 +730,19 @@ class BotManagerCommandHandler:
     )
     def list_bots(self, session: Session, context: TenantContext) -> ServiceResponse:
         try:
-            result = session.execute(
-                text("SELECT id, name, capabilities, is_active FROM bot_profiles WHERE tenant_id = :tid"),
-                {"tid": context.tenant_id}
-            ).mappings().all()
-            return ServiceResponse.success_res(data=[dict(row) for row in result], message="Bot profiles listed.")
+            result = (
+                session.execute(
+                    text(
+                        "SELECT id, name, capabilities, is_active FROM bot_profiles WHERE tenant_id = :tid"
+                    ),
+                    {"tid": context.tenant_id},
+                )
+                .mappings()
+                .all()
+            )
+            return ServiceResponse.success_res(
+                data=[dict(row) for row in result], message="Bot profiles listed."
+            )
         except Exception as e:
             return ServiceResponse.error_res(f"Error listing bots: {str(e)}", "BOT_LIST_ERROR")
 
@@ -718,10 +752,15 @@ class BotManagerCommandHandler:
         params_model={"bot_profile_id": "string", "capabilities": "dict"},
     )
     def update_capabilities(
-        self, session: Session, context: TenantContext, bot_profile_id: str, capabilities: Dict[str, bool]
+        self,
+        session: Session,
+        context: TenantContext,
+        bot_profile_id: str,
+        capabilities: dict[str, bool],
     ) -> ServiceResponse:
         try:
             import json
+
             session.execute(
                 text(
                     "UPDATE bot_profiles SET capabilities = :caps WHERE tenant_id = :tid AND id = :bid"
@@ -732,7 +771,10 @@ class BotManagerCommandHandler:
             return ServiceResponse.success_res(message="Bot capabilities updated.")
         except Exception as e:
             session.rollback()
-            return ServiceResponse.error_res(f"Error updating capabilities: {str(e)}", "BOT_UPDATE_ERROR")
+            return ServiceResponse.error_res(
+                f"Error updating capabilities: {str(e)}", "BOT_UPDATE_ERROR"
+            )
+
 
 bot_manager_commands = BotManagerCommandHandler()
 whatsapp_commands = WhatsappCommandHandler()

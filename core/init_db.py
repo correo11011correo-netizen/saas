@@ -515,14 +515,16 @@ def init_db():
             return
 
         except Exception as e:
-            logger.error(f"Initialization attempt {attempt+1} failed: {e}")
+            logger.error(f"Initialization attempt {attempt + 1} failed: {e}")
             if attempt == max_retries - 1:
                 raise e
             import time
+
             time.sleep(2)
         finally:
             if conn:
                 conn.close()
+
 
 if __name__ == "__main__":
     init_db()

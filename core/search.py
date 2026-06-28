@@ -1,7 +1,8 @@
 import logging
-from typing import List, Dict, Any, Tuple
+from typing import Any
 
 logger = logging.getLogger("OmniCore.SearchEngine")
+
 
 class SearchEngine:
     """
@@ -35,11 +36,14 @@ class SearchEngine:
         """Calcula la similitud entre 0 y 1."""
         distance = SearchEngine.levenshtein_distance(s1.lower(), s2.lower())
         max_len = max(len(s1), len(s2))
-        if max_len == 0: return 1.0
+        if max_len == 0:
+            return 1.0
         return 1.0 - (distance / max_len)
 
     @classmethod
-    def search_products(cls, query: str, products: List[Dict[str, Any]]) -> List[Tuple[float, Dict[str, Any]]]:
+    def search_products(
+        cls, query: str, products: list[dict[str, Any]]
+    ) -> list[tuple[float, dict[str, Any]]]:
         """
         Busca productos basándose en una query.
         Retorna una lista de (score, producto) ordenada por relevancia.
@@ -48,14 +52,14 @@ class SearchEngine:
         results = []
 
         for p in products:
-            name = p['name'].lower()
-            category = (p.get('category') or "").lower()
-            
+            name = p["name"].lower()
+            category = (p.get("category") or "").lower()
+
             # 1. Coincidencia Exacta (Score: 1.0)
             if query == name:
                 results.append((1.0, p))
                 continue
-            
+
             # 2. Coincidencia de Categoría (Score: 0.9)
             if query == category:
                 results.append((0.9, p))
@@ -68,7 +72,7 @@ class SearchEngine:
 
             # 4. Coincidencia Difusa (Fuzzy) (Score: 0.0 - 0.7)
             sim = cls.similarity(query, name)
-            if sim > 0.6: # Umbral de tolerancia
+            if sim > 0.6:  # Umbral de tolerancia
                 results.append((sim, p))
 
         # Ordenar por score descendente

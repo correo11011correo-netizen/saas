@@ -1,6 +1,7 @@
-import psycopg2
-import os
 import logging
+import os
+
+import psycopg2
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Migration")
@@ -8,6 +9,7 @@ logger = logging.getLogger("Migration")
 DB_URL = os.getenv("DATABASE_URL")
 if not DB_URL:
     raise Exception("DATABASE_URL variable not set")
+
 
 def migrate():
     conn = None
@@ -73,7 +75,7 @@ def migrate():
         """)
         logger.info("✅ Migrated 'bot_options' account_alias -> bot_profile_id.")
 
-        # 5. (Optional) Now we could remove account_alias, but for safety we'll keep it 
+        # 5. (Optional) Now we could remove account_alias, but for safety we'll keep it
         # until we verify the backend is fully updated.
 
         logger.info("Migration completed successfully.")
@@ -84,6 +86,7 @@ def migrate():
     finally:
         if conn:
             conn.close()
+
 
 if __name__ == "__main__":
     migrate()

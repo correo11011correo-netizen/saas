@@ -1,11 +1,12 @@
 import logging
-from typing import Any, Dict, Optional
+import os
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from core.types import ServiceResponse
-from core.decorators import command
+
 from core.context import TenantContext
-import os
+from core.decorators import command
+from core.types import ServiceResponse
 
 logger = logging.getLogger("OmniCore.Credentials")
 BASE_URL = os.getenv("BASE_URL")
@@ -24,9 +25,7 @@ class CredentialsCommandHandler:
         description="Lists all configured credentials for the current tenant.",
         params_model={},
     )
-    def list_credentials(
-        self, session: Session, context: TenantContext
-    ) -> ServiceResponse:
+    def list_credentials(self, session: Session, context: TenantContext) -> ServiceResponse:
         try:
             result = (
                 session.execute(
@@ -132,8 +131,10 @@ class CredentialsCommandHandler:
         metadata: str = None,
     ) -> ServiceResponse:
         try:
-            logger.info(f"Intentando establecer credencial para tenant {context.tenant_id}, servicio {service}, alias {account_alias}")
-            
+            logger.info(
+                f"Intentando establecer credencial para tenant {context.tenant_id}, servicio {service}, alias {account_alias}"
+            )
+
             # Upsert credential for this tenant and account alias
             session.execute(
                 text(
@@ -161,7 +162,10 @@ class CredentialsCommandHandler:
             )
         except Exception as e:
             session.rollback()
-            logger.error(f"Error al establecer credencial para {service} ({account_alias}): {str(e)}", exc_info=True)
+            logger.error(
+                f"Error al establecer credencial para {service} ({account_alias}): {str(e)}",
+                exc_info=True,
+            )
             return ServiceResponse.error_res(
                 f"Error setting credential: {str(e)}", "CRED_SET_ERROR"
             )
@@ -199,9 +203,7 @@ class CredentialsCommandHandler:
                     f"No credentials found for {service} ({account_alias})",
                     "CRED_NOT_FOUND",
                 )
-            return ServiceResponse.success_res(
-                data=dict(result), message="Credential retrieved."
-            )
+            return ServiceResponse.success_res(data=dict(result), message="Credential retrieved.")
         except Exception as e:
             return ServiceResponse.error_res(
                 f"Error fetching credential: {str(e)}", "CRED_GET_ERROR"

@@ -1,6 +1,7 @@
+import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-import os
 
 DB_URL = os.getenv("DATABASE_URL")
 if not DB_URL:

@@ -1,13 +1,14 @@
 import functools
-from typing import Callable, Any, Dict, Optional, Type
+from collections.abc import Callable
+
 from pydantic import BaseModel
 
 
 def command(
-    name: str, 
-    description: str, 
-    params_model: Optional[Type[BaseModel]] = None,
-    required_plan: str = "free"
+    name: str,
+    description: str,
+    params_model: type[BaseModel] | None = None,
+    required_plan: str = "free",
 ):
     """
     Decorator to mark a method as a system command and register it

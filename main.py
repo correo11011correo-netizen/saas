@@ -1,39 +1,34 @@
-from fastapi import FastAPI, Depends, HTTPException, Header, Request, Response
+import logging
+import os
+from contextlib import asynccontextmanager
+from typing import Any
+
+import uvicorn
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from typing import Dict, Any, Optional
-import uvicorn
-import os
-import uuid
-import json
-import logging
 
-# Configure global logging to ensure custom loggers print to stdout
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-
-# ... (keep imports and engine/SessionLocal as they are)
-
-
-from core.dispatcher import dispatcher
 from core.auth import auth_service
-from core.context import TenantContext
-from core.webhooks import router as webhook_router
+from core.billing import billing_commands
 from core.commands import core_commands
+from core.context import TenantContext
 from core.credentials import credentials_commands
+from core.dispatcher import dispatcher
+from core.saas_admin import saas_admin_commands
+from core.webhooks import router as webhook_router
+from core.webhooks import set_db_session_factory
+from employees.commands import employee_commands
 from sales.commands import sales_commands
 from stock.commands import stock_commands
 from stock.sync import stock_sync_commands
-from whatsapp.commands import whatsapp_commands, bot_manager_commands
-from employees.commands import employee_commands
-from core.saas_admin import saas_admin_commands
-from core.billing import billing_commands
+from whatsapp.commands import bot_manager_commands, whatsapp_commands
 
-# ... (Database setup and FastAPI app setup remain as before, I will keep the existing code and just clean up the functions below)
+# Configure global logging to ensure custom loggers print to stdout
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 # Database Configuration
 DB_URL = os.getenv("DATABASE_URL")
@@ -41,8 +36,6 @@ if not DB_URL:
     raise Exception("DATABASE_URL variable not set")
 engine = create_engine(DB_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-from contextlib import asynccontextmanager
 
 
 @asynccontextmanager
@@ -59,7 +52,6 @@ async def lifespan(app: FastAPI):
 
     # 2. Register all command handlers
     dispatcher.register_handler(core_commands)
-    dispatcher.register_handler(core_commands)
     dispatcher.register_handler(credentials_commands)
     dispatcher.register_handler(sales_commands)
     dispatcher.register_handler(stock_commands)
@@ -71,8 +63,6 @@ async def lifespan(app: FastAPI):
     dispatcher.register_handler(billing_commands)
 
     # Inject DB factory into Webhooks AND Dispatcher
-    from core.webhooks import set_db_session_factory
-
     set_db_session_factory(SessionLocal)
     dispatcher.set_db_session_factory(SessionLocal)
     yield
@@ -119,7 +109,7 @@ def get_db():
 
 # Dependency to get current tenant context from JWT
 def get_current_context(
-    request: Request, authorization: Optional[str] = Header(None)
+    request: Request, authorization: str | None = Header(None)
 ) -> TenantContext:
     token = None
 
@@ -142,37 +132,36 @@ def get_current_context(
 
 # --- SDUI ENDPOINT ---
 
+
 @app.get("/api/boot")
 def boot_app(context: TenantContext = Depends(get_current_context), db=Depends(get_db)):
     """
     The 'Startup Contract'. Delivers the entire UI and config manifest to the APK.
     Filters available modules based on plan and custom entitlements.
     """
-    from core.sdui import sdui_engine
     from core.module_entitlements import module_entitlement_service
-    
+    from core.sdui import sdui_engine
+
     # 1. Get the basic manifest (theme, base layout)
     manifest = sdui_engine.get_boot_manifest(db, context)
-    
+
     # 2. Calculate which modules this specific tenant is allowed to see
     active_modules = module_entitlement_service.get_active_modules(db, context)
-    
+
     # 3. Filter the layout to only include components belonging to active modules
     # This ensures the APK never even receives the definition of locked modules.
     manifest["active_modules"] = list(active_modules)
-    
+
     return manifest
+
 
 # --- AUTH ENDPOINTS ---
 
 
-
 @app.post("/auth/register")
-def register(data: Dict[str, Any], response: Response, db=Depends(get_db)):
+def register(data: dict[str, Any], response: Response, db=Depends(get_db)):
     # Data: {email, password, business_name}
-    res = auth_service.register(
-        db, data["email"], data["password"], data["business_name"]
-    )
+    res = auth_service.register(db, data["email"], data["password"], data["business_name"])
     if not res["success"]:
         raise HTTPException(status_code=400, detail=res["error"])
 
@@ -188,7 +177,7 @@ def register(data: Dict[str, Any], response: Response, db=Depends(get_db)):
 
 
 @app.post("/auth/login")
-def login(data: Dict[str, Any], response: Response, db=Depends(get_db)):
+def login(data: dict[str, Any], response: Response, db=Depends(get_db)):
     # Data: {email, password}
     res = auth_service.authenticate(db, data["email"], data["password"])
     if not res:
@@ -210,7 +199,7 @@ def login(data: Dict[str, Any], response: Response, db=Depends(get_db)):
 
 @app.post("/api/execute")
 def execute_command(
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     context: TenantContext = Depends(get_current_context),
     db=Depends(get_db),
 ):
@@ -241,7 +230,6 @@ def execute_command(
 
 # --- MIDDLEWARE DE LOGGING ---
 # Removed verbose request logging for production.
-
 
 
 # Montar frontend al final para que sirva como fallback y maneje rutas relativas

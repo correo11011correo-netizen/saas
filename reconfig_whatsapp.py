@@ -1,6 +1,7 @@
-import requests
 import json
 import os
+
+import requests
 
 BASE_URL = os.getenv("BASE_URL", "https://saas-production-2dd6.up.railway.app")
 

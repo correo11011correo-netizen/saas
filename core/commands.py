@@ -1,12 +1,12 @@
 import logging
 import os
-from typing import List, Optional
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from core.types import ServiceResponse
-from core.decorators import command
 from core.context import TenantContext
+from core.decorators import command
+from core.types import ServiceResponse
 
 logger = logging.getLogger("OmniCore.CoreCommands")
 
@@ -47,9 +47,7 @@ class CoreCommandHandler:
                 },
             )
             session.commit()
-            return ServiceResponse.success_res(
-                message=f"Employee {username} created successfully."
-            )
+            return ServiceResponse.success_res(message=f"Employee {username} created successfully.")
         except Exception as e:
             session.rollback()
             return ServiceResponse.error_res(
@@ -89,9 +87,7 @@ class CoreCommandHandler:
                     {"uid": user_id, "pk": permission_key, "tid": context.tenant_id},
                 )
             session.commit()
-            return ServiceResponse.success_res(
-                message="Permission updated successfully."
-            )
+            return ServiceResponse.success_res(message="Permission updated successfully.")
         except Exception as e:
             session.rollback()
             return ServiceResponse.error_res(
@@ -117,9 +113,7 @@ class CoreCommandHandler:
                 data=[dict(u) for u in result], message="Users listed."
             )
         except Exception as e:
-            return ServiceResponse.error_res(
-                f"Error listing users: {str(e)}", "AUTH_LIST_ERROR"
-            )
+            return ServiceResponse.error_res(f"Error listing users: {str(e)}", "AUTH_LIST_ERROR")
 
     @command(
         name="core.get_profile",
@@ -149,9 +143,7 @@ class CoreCommandHandler:
             )
 
             if not tenant or not user:
-                return ServiceResponse.error_res(
-                    "Profile not found", "PROFILE_NOT_FOUND"
-                )
+                return ServiceResponse.error_res("Profile not found", "PROFILE_NOT_FOUND")
 
             return ServiceResponse.success_res(
                 data={
@@ -163,9 +155,7 @@ class CoreCommandHandler:
                 message="Profile retrieved successfully.",
             )
         except Exception as e:
-            return ServiceResponse.error_res(
-                f"Error retrieving profile: {str(e)}", "PROFILE_ERROR"
-            )
+            return ServiceResponse.error_res(f"Error retrieving profile: {str(e)}", "PROFILE_ERROR")
 
     @command(
         name="system.info",

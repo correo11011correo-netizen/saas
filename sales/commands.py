@@ -1,21 +1,28 @@
+import os
+
 import mercadopago
 from sqlalchemy import text
-from core.types import ServiceResponse
-from core.decorators import command
-from core.context import TenantContext
 from sqlalchemy.orm import Session
-import json
-import os
+
+from core.context import TenantContext
+from core.decorators import command
+from core.types import ServiceResponse
 
 BASE_URL = os.getenv("BASE_URL")
 if not BASE_URL:
     raise Exception("BASE_URL environment variable is required for Mercado Pago notifications")
 
+
 class SalesCommandHandler:
     @command(
         name="sales.create",
         description="Creates a sales order and generates a Mercado Pago payment link.",
-        params_model={"items": "list", "total": "float", "account_alias": "string", "client_request_id": "string"},
+        params_model={
+            "items": "list",
+            "total": "float",
+            "account_alias": "string",
+            "client_request_id": "string",
+        },
     )
     def create_sale(
         self,
@@ -29,16 +36,22 @@ class SalesCommandHandler:
         try:
             # 0. Idempotency Check: If a request ID is provided, check if sale already exists
             if client_request_id:
-                existing_sale = session.execute(
-                    text("SELECT id FROM sales_orders WHERE client_request_id = :rid AND tenant_id = :tid"),
-                    {"rid": client_request_id, "tid": context.tenant_id}
-                ).mappings().first()
-                
+                existing_sale = (
+                    session.execute(
+                        text(
+                            "SELECT id FROM sales_orders WHERE client_request_id = :rid AND tenant_id = :tid"
+                        ),
+                        {"rid": client_request_id, "tid": context.tenant_id},
+                    )
+                    .mappings()
+                    .first()
+                )
+
                 if existing_sale:
                     # Sale already exists, return its ID (Avoid duplication during offline sync)
                     return ServiceResponse.success_res(
-                        data={"sale_id": str(existing_sale["id"])}, 
-                        message="Sale already registered (idempotency check)."
+                        data={"sale_id": str(existing_sale["id"])},
+                        message="Sale already registered (idempotency check).",
                     )
 
             # 1. Get credentials for MP
@@ -54,9 +67,7 @@ class SalesCommandHandler:
             )
 
             if not cred:
-                return ServiceResponse.error_res(
-                    "MP credentials not found", "MP_CREDS_ERROR"
-                )
+                return ServiceResponse.error_res("MP credentials not found", "MP_CREDS_ERROR")
 
             # 2. Create Sale in DB
             sale_id = session.execute(
@@ -70,7 +81,7 @@ class SalesCommandHandler:
 
             for item in items:
                 # Esperamos item con: code, quantity, price
-                subtotal = float(item['price']) * int(item['quantity'])
+                subtotal = float(item["price"]) * int(item["quantity"])
                 session.execute(
                     text(
                         "INSERT INTO sale_items (tenant_id, sale_id, product_code, quantity, price, subtotal) "
@@ -79,11 +90,11 @@ class SalesCommandHandler:
                     {
                         "tid": context.tenant_id,
                         "sid": sale_id,
-                        "code": item['code'],
-                        "qty": item['quantity'],
-                        "price": item['price'],
+                        "code": item["code"],
+                        "qty": item["quantity"],
+                        "price": item["price"],
                         "sub": subtotal,
-                    }
+                    },
                 )
 
             # 4. Create MP Preference
@@ -126,21 +137,33 @@ class SalesCommandHandler:
     ) -> ServiceResponse:
         try:
             # 1. Update Order Status
-            result = session.execute(
-                text(
-                    "UPDATE sales_orders SET payment_status = 'paid' WHERE id = :id AND tenant_id = :tid RETURNING total"
-                ),
-                {"id": sale_id, "tid": context.tenant_id},
-            ).mappings().first()
+            result = (
+                session.execute(
+                    text(
+                        "UPDATE sales_orders SET payment_status = 'paid' WHERE id = :id AND tenant_id = :tid RETURNING total"
+                    ),
+                    {"id": sale_id, "tid": context.tenant_id},
+                )
+                .mappings()
+                .first()
+            )
 
             if not result:
-                return ServiceResponse.error_res("Order not found or already processed", "ORDER_NOT_FOUND")
+                return ServiceResponse.error_res(
+                    "Order not found or already processed", "ORDER_NOT_FOUND"
+                )
 
             # 2. Deduct Stock for each item in the sale
-            items = session.execute(
-                text("SELECT product_code, quantity FROM sale_items WHERE sale_id = :sid AND tenant_id = :tid"),
-                {"sid": sale_id, "tid": context.tenant_id},
-            ).mappings().all()
+            items = (
+                session.execute(
+                    text(
+                        "SELECT product_code, quantity FROM sale_items WHERE sale_id = :sid AND tenant_id = :tid"
+                    ),
+                    {"sid": sale_id, "tid": context.tenant_id},
+                )
+                .mappings()
+                .all()
+            )
 
             for item in items:
                 # Restar cantidad (quantity negativa)
@@ -148,9 +171,13 @@ class SalesCommandHandler:
                     text(
                         "UPDATE products SET quantity = quantity - :qty WHERE code = :code AND tenant_id = :tid"
                     ),
-                    {"qty": item['quantity'], "code": item['product_code'], "tid": context.tenant_id},
+                    {
+                        "qty": item["quantity"],
+                        "code": item["product_code"],
+                        "tid": context.tenant_id,
+                    },
                 )
-                
+
                 # Registrar movimiento de stock
                 session.execute(
                     text(
@@ -158,11 +185,11 @@ class SalesCommandHandler:
                         "VALUES (:code, :qty, 'SALE_CONFIRMED', :uid, :tid)"
                     ),
                     {
-                        "code": item['product_code'],
-                        "qty": -item['quantity'],
+                        "code": item["product_code"],
+                        "qty": -item["quantity"],
                         "uid": context.user_id,
                         "tid": context.tenant_id,
-                    }
+                    },
                 )
 
             session.commit()

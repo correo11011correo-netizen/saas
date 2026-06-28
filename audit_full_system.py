@@ -37,9 +37,7 @@ def deep_audit():
 
             for case in test_cases:
                 print(f"  > Probando panel: {case['label']}")
-                dock_item = page.query_selector(
-                    f'.dock-item[data-label="{case["label"]}"]'
-                )
+                dock_item = page.query_selector(f'.dock-item[data-label="{case["label"]}"]')
                 if not dock_item:
                     print(f"    ❌ Icono '{case['label']}' no encontrado.")
                     continue

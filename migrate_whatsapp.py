@@ -1,8 +1,10 @@
-import psycopg2
-from psycopg2 import sql
 import logging
 
-DB_URL = "postgresql://postgres:TFralZyHIJnjyZrNMtoDqqtUlPTsttvT@thomas.proxy.rlwy.net:24031/railway"
+import psycopg2
+
+DB_URL = (
+    "postgresql://postgres:TFralZyHIJnjyZrNMtoDqqtUlPTsttvT@thomas.proxy.rlwy.net:24031/railway"
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Migration")

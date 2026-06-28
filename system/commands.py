@@ -1,11 +1,11 @@
 import logging
-from typing import Any, Dict, Optional, List
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from core.types import ServiceResponse
-from core.decorators import command
 from core.context import TenantContext
+from core.decorators import command
+from core.types import ServiceResponse
 
 logger = logging.getLogger("OmniCore.SystemCommands")
 
@@ -27,7 +27,7 @@ class SystemCommandHandler:
         context: TenantContext,
         limit: int = 50,
         offset: int = 0,
-        command: Optional[str] = None,
+        command: str | None = None,
     ) -> ServiceResponse:
         try:
             query = "SELECT id, tenant_id, user_id, command, params, timestamp FROM audit_log WHERE tenant_id = :tid"
@@ -38,7 +38,7 @@ class SystemCommandHandler:
             query += " ORDER BY timestamp DESC LIMIT :limit OFFSET :offset"
             params["limit"] = limit
             params["offset"] = offset
-            
+
             result = session.execute(text(query), params).mappings().all()
             return ServiceResponse.success_res(
                 data=[dict(row) for row in result], message="Audit logs retrieved."
@@ -61,8 +61,9 @@ class SystemCommandHandler:
     ) -> ServiceResponse:
         try:
             import hashlib
+
             password_hash = hashlib.sha256(password.encode()).hexdigest()
-            
+
             session.execute(
                 text(
                     "INSERT INTO users (email, password_hash, role, tenant_id) VALUES (:email, :pass, :role, :tid)"
@@ -70,14 +71,10 @@ class SystemCommandHandler:
                 {"email": username, "pass": password_hash, "role": role, "tid": context.tenant_id},
             )
             session.commit()
-            return ServiceResponse.success_res(
-                message=f"User {username} created successfully."
-            )
+            return ServiceResponse.success_res(message=f"User {username} created successfully.")
         except Exception as e:
             session.rollback()
-            return ServiceResponse.error_res(
-                f"Error creating user: {str(e)}", "USER_CREATE_ERROR"
-            )
+            return ServiceResponse.error_res(f"Error creating user: {str(e)}", "USER_CREATE_ERROR")
 
     @command(
         name="system.users.list",
@@ -86,18 +83,20 @@ class SystemCommandHandler:
     )
     def list_users(self, session: Session, context: TenantContext) -> ServiceResponse:
         try:
-            result = session.execute(
-                text("SELECT id, email, role FROM users WHERE tenant_id = :tid"),
-                {"tid": context.tenant_id},
-            ).mappings().all()
-            
+            result = (
+                session.execute(
+                    text("SELECT id, email, role FROM users WHERE tenant_id = :tid"),
+                    {"tid": context.tenant_id},
+                )
+                .mappings()
+                .all()
+            )
+
             return ServiceResponse.success_res(
                 data=[dict(row) for row in result], message="Employees listed."
             )
         except Exception as e:
-            return ServiceResponse.error_res(
-                f"Error listing users: {str(e)}", "USER_LIST_ERROR"
-            )
+            return ServiceResponse.error_res(f"Error listing users: {str(e)}", "USER_LIST_ERROR")
 
 
 system_commands = SystemCommandHandler()

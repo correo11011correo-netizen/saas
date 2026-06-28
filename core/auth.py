@@ -1,13 +1,14 @@
-import hashlib
-import uuid
-import jwt
 import datetime
-import secrets
+import hashlib
 import json
 import os
-from typing import Optional, Dict
+import secrets
+import uuid
+
+import jwt
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
 from .context import TenantContext
 
 SECRET_KEY = os.getenv("JWT_SECRET", "OMNICORE_FALLBACK_SECRET_KEY_CHANGE_IN_PROD")
@@ -15,9 +16,7 @@ ALGORITHM = "HS256"
 
 
 class AuthService:
-    def register(
-        self, session: Session, email: str, password: str, business_name: str
-    ) -> Dict:
+    def register(self, session: Session, email: str, password: str, business_name: str) -> dict:
         try:
             tenant_id = uuid.uuid4()
             webhook_secret = secrets.token_urlsafe(32)
@@ -47,9 +46,7 @@ class AuthService:
                 },
             )
             session.execute(
-                text(
-                    "INSERT INTO cash_box (id, tenant_id, abierta) VALUES (:id, :tid, false)"
-                ),
+                text("INSERT INTO cash_box (id, tenant_id, abierta) VALUES (:id, :tid, false)"),
                 {"id": uuid.uuid4(), "tid": tenant_id},
             )
 
@@ -157,9 +154,7 @@ class AuthService:
             session.rollback()
             return {"success": False, "error": str(e)}
 
-    def authenticate(
-        self, session: Session, email: str, password: str
-    ) -> Optional[Dict]:
+    def authenticate(self, session: Session, email: str, password: str) -> dict | None:
         password_hash = hashlib.sha256(password.encode()).hexdigest()
         user = (
             session.execute(
@@ -176,9 +171,7 @@ class AuthService:
         )
         if not user:
             return None
-        token = self.create_token(
-            user["tenant_id"], user["id"], user["role"], user["plan"]
-        )
+        token = self.create_token(user["tenant_id"], user["id"], user["role"], user["plan"])
         return {
             "token": token,
             "tenant_id": user["tenant_id"],
@@ -201,7 +194,7 @@ class AuthService:
         }
         return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
-    def decode_token(self, token: str) -> Optional[TenantContext]:
+    def decode_token(self, token: str) -> TenantContext | None:
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             return TenantContext(

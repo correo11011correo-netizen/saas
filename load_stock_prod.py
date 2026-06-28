@@ -1,5 +1,6 @@
-import requests
 import os
+
+import requests
 
 BASE_URL = os.getenv("BASE_URL", "https://saas-production-2dd6.up.railway.app")
 
@@ -15,7 +16,7 @@ def main():
         login_res = requests.post(f"{BASE_URL}/auth/login", json=login_data)
         login_res.raise_for_status()
         token = login_res.json().get("token")
-        print(f"  [OK] Autenticación exitosa. Token obtenido.")
+        print("  [OK] Autenticación exitosa. Token obtenido.")
     except Exception as e:
         print(f"  [ERROR] Fallo al autenticar: {e}")
         return
@@ -38,9 +39,7 @@ def main():
     }
 
     try:
-        stock_res = requests.post(
-            f"{BASE_URL}/api/execute", json=stock_data, headers=headers
-        )
+        stock_res = requests.post(f"{BASE_URL}/api/execute", json=stock_data, headers=headers)
         stock_res.raise_for_status()
         print(f"  [OK] Respuesta del servidor: {stock_res.json()}")
     except Exception as e:

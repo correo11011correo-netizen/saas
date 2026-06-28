@@ -1,6 +1,6 @@
 import asyncio
+
 import aiohttp
-import uuid
 
 BASE_URL = "https://saas-production-2dd6.up.railway.app"
 

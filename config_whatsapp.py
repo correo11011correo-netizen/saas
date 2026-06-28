@@ -1,6 +1,7 @@
-import requests
 import json
 import os
+
+import requests
 
 BASE_URL = os.getenv("BASE_URL", "https://saas-production-2dd6.up.railway.app")
 
@@ -39,7 +40,7 @@ def main():
     print(f"  [URL] {data['data']['url']}")
 
     # Also get the secret for the verify token
-    secret_res = requests.post(
+    requests.post(
         f"{BASE_URL}/api/execute",
         json={"command": "system.get_credential", "params": {"service": "whatsapp"}},
         headers=headers,

@@ -1,6 +1,6 @@
-import requests
-import sys
 import os
+
+import requests
 
 BASE_URL = os.getenv("BASE_URL", "https://saas-production-2dd6.up.railway.app")
 
@@ -26,7 +26,7 @@ def audit_flow():
     data = reg_response.json()
     token = data.get("token")
     headers = {"Authorization": f"Bearer {token}"}
-    print(f"  [OK] Negocio creado. Token obtenido.")
+    print("  [OK] Negocio creado. Token obtenido.")
 
     # 2. Gestión de Empleados
     print("[2/4] Invitando empleado...")

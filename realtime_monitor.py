@@ -1,8 +1,8 @@
 import asyncio
-import aiohttp
-import time
-import random
 import os
+import time
+
+import aiohttp
 
 BASE_URL = os.getenv("BASE_URL", "https://saas-production-2dd6.up.railway.app")
 

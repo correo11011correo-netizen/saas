@@ -1,6 +1,5 @@
 import uuid
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -14,4 +13,4 @@ class TenantContext:
     user_id: uuid.UUID
     role: str
     plan: str = "free"  # default to free
-    credential_id: Optional[str] = None
+    credential_id: str | None = None

@@ -1,17 +1,17 @@
-import logging
 import json
+import logging
 import uuid
-from typing import Any, Dict, Callable, Type
-from sqlalchemy.orm import Session
+from collections.abc import Callable
+from typing import Any
+
 from .context import TenantContext
-from .decorators import command
 
 logger = logging.getLogger("OmniCore.Dispatcher")
 
 
 class CommandDispatcher:
     def __init__(self, db_session_factory=None):
-        self.registry: Dict[str, Callable] = {}
+        self.registry: dict[str, Callable] = {}
         self.db_session_factory = db_session_factory
 
     def set_db_session_factory(self, factory):
@@ -31,11 +31,11 @@ class CommandDispatcher:
     def register(self, name: str, func: Callable):
         self.registry[name] = func
 
-    def execute(
-        self, command_name: str, params: Dict[str, Any], context: TenantContext
-    ) -> Any:
+    def execute(self, command_name: str, params: dict[str, Any], context: TenantContext) -> Any:
         if command_name not in self.registry:
-            logger.warning(f"Command {command_name} not found in registry. Available commands: {list(self.registry.keys())}")
+            logger.warning(
+                f"Command {command_name} not found in registry. Available commands: {list(self.registry.keys())}"
+            )
             return {
                 "success": False,
                 "error": f"Command {command_name} not found",
@@ -74,10 +74,10 @@ class CommandDispatcher:
                 logger.exception(f"Error executing {command_name}: {e}")
                 return {"success": False, "error": str(e), "code": "EXECUTION_ERROR"}
 
-    def _audit(self, context: TenantContext, command: str, params: Dict):
-        from sqlalchemy import text
+    def _audit(self, context: TenantContext, command: str, params: dict):
         import time
-        import json
+
+        from sqlalchemy import text
 
         class UUIDEncoder(json.JSONEncoder):
             def default(self, obj):
@@ -114,7 +114,7 @@ class CommandDispatcher:
                 # Espera exponencial breve antes del reintento (0.1s, 0.2s...)
                 wait_time = (attempt + 1) * 0.1
                 logger.warning(
-                    f"Audit connection failed. Retrying in {wait_time}s... (Attempt {attempt+1}/{max_retries})"
+                    f"Audit connection failed. Retrying in {wait_time}s... (Attempt {attempt + 1}/{max_retries})"
                 )
                 time.sleep(wait_time)
             finally:

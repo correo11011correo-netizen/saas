@@ -1,6 +1,7 @@
-import requests
 import json
 import os
+
+import requests
 
 BASE_URL = os.getenv("BASE_URL", "https://saas-production-2dd6.up.railway.app")
 
@@ -39,9 +40,7 @@ def run_e2e_test():
     # 3. Crear Flujo de Bot
     flow_data = {
         "menu": "main",
-        "options": [
-            {"label": "Comprar Coca Cola", "action": "buy", "product": "GAS-001"}
-        ],
+        "options": [{"label": "Comprar Coca Cola", "action": "buy", "product": "GAS-001"}],
     }
     requests.post(
         f"{BASE_URL}/api/execute",

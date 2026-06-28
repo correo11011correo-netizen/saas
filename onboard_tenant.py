@@ -1,7 +1,8 @@
-import requests
 import json
 import sys
 from getpass import getpass
+
+import requests
 
 
 def clear_screen():
@@ -20,8 +21,7 @@ def run_onboarding():
 
     # 1. Configuración de conexión
     api_base = (
-        input("🌐 URL de la API (default: http://localhost:8000): ")
-        or "http://localhost:8000"
+        input("🌐 URL de la API (default: http://localhost:8000): ") or "http://localhost:8000"
     )
     domain = input("🌍 Dominio Público para Webhooks (ej: https://api.midominio.com): ")
     if not domain:
@@ -55,9 +55,7 @@ def run_onboarding():
 
     # 3. Configuración de Credenciales de WhatsApp
     print("\n--- 📱 Integración con Meta WhatsApp ---")
-    print(
-        "Para que el sistema pueda enviar mensajes, necesitamos el API Token de Meta."
-    )
+    print("Para que el sistema pueda enviar mensajes, necesitamos el API Token de Meta.")
     whatsapp_token = input("🔑 Meta WhatsApp API Token: ")
 
     if whatsapp_token:
@@ -73,9 +71,7 @@ def run_onboarding():
         }
         try:
             headers = {"Authorization": f"Bearer {token}"}
-            cred_res = requests.post(
-                f"{api_base}/api/execute", headers=headers, json=cred_payload
-            )
+            cred_res = requests.post(f"{api_base}/api/execute", headers=headers, json=cred_payload)
             cred_res.raise_for_status()
             print("✅ Credenciales de WhatsApp vinculadas.")
         except Exception as e:
@@ -99,9 +95,7 @@ def run_onboarding():
     print(f"📧 Email:         {email}")
     print(f"🔑 Password:      {password}")
     print("-" * 60)
-    print(
-        "\n👉 Copia la Webhook URL en el panel de Meta Developers -> WhatsApp -> Configuration"
-    )
+    print("\n👉 Copia la Webhook URL en el panel de Meta Developers -> WhatsApp -> Configuration")
     print("=" * 60)
 
 

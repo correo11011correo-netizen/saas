@@ -1,7 +1,9 @@
 from sqlalchemy import create_engine, text
 
 # Configuration
-DB_URL = "postgresql://postgres:TFralZyHIJnjyZrNMtoDqqtUlPTsttvT@thomas.proxy.rlwy.net:24031/railway"
+DB_URL = (
+    "postgresql://postgres:TFralZyHIJnjyZrNMtoDqqtUlPTsttvT@thomas.proxy.rlwy.net:24031/railway"
+)
 engine = create_engine(DB_URL)
 
 
