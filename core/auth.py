@@ -229,7 +229,7 @@ class AuthService:
 
     def create_token(self, tenant_id, user_id, role, plan=None) -> str:
         payload = {
-            "tenant_id": str(tenant_id),
+            "tenant_id": str(tenant_id) if tenant_id else "SYSTEM",
             "user_id": str(user_id),
             "role": role,
             "plan": plan,
@@ -241,7 +241,7 @@ class AuthService:
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             return TenantContext(
-                tenant_id=uuid.UUID(payload["tenant_id"]),
+                tenant_id=uuid.UUID(payload["tenant_id"]) if payload["tenant_id"] != "SYSTEM" else None,
                 user_id=uuid.UUID(payload["user_id"]),
                 role=payload["role"],
                 plan=payload.get("plan", "free"),

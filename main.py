@@ -18,6 +18,8 @@ from core.context import TenantContext
 from core.credentials import credentials_commands
 from core.crm_commands import crm_commands
 from core.dispatcher import dispatcher
+from core.module_entitlements import module_entitlement_service
+from core.sdui import sdui_engine
 from core.saas_admin import saas_admin_commands
 from core.webhooks import router as webhook_router, set_db_session_factory
 from employees.commands import employee_commands
@@ -141,18 +143,18 @@ def boot_app(context: TenantContext = Depends(get_current_context), db=Depends(g
     The 'Startup Contract'. Delivers the entire UI and config manifest to the APK.
     Filters available modules based on plan and custom entitlements.
     """
-    from core.module_entitlements import module_entitlement_service
-    from core.sdui import sdui_engine
 
     # 1. Get the basic manifest (theme, base layout)
     manifest = sdui_engine.get_boot_manifest(db, context)
 
-    # 2. Calculate which modules this specific tenant is allowed to see
-    active_modules = module_entitlement_service.get_active_modules(db, context)
-
-    # 3. Filter the layout to only include components belonging to active modules
-    # This ensures the APK never even receives the definition of locked modules.
-    manifest["active_modules"] = list(active_modules)
+    # 2. Calculate which modules this specific tenant is allowed to see (Skip for SuperAdmin)
+    if context.tenant_id:
+        active_modules = module_entitlement_service.get_active_modules(db, context)
+        # 3. Filter the layout to only include components belonging to active modules
+        # This ensures the APK never even receives the definition of locked modules.
+        manifest["active_modules"] = list(active_modules)
+    else:
+        manifest["active_modules"] = []
 
     return manifest
 

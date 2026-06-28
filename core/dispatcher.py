@@ -45,14 +45,15 @@ class CommandDispatcher:
         func = self.registry[command_name]
         required_plan = getattr(func, "_required_plan", "free")
 
-        # Plan-Based Access Control (PBAC)
-        if required_plan == "pro" and context.plan != "pro":
-            return {
-                "success": False,
-                "error": "This command requires a PRO plan.",
-                "code": "PLAN_REQUIRED",
-            }
-
+        # Plan-Based Access Control (PBAC) & SuperAdmin Bypass
+        if context.role != "superadmin":
+            if required_plan == "pro" and context.plan != "pro":
+                return {
+                    "success": False,
+                    "error": "This command requires a PRO plan.",
+                    "code": "PLAN_REQUIRED",
+                }
+        
         with self.db_session_factory() as session:
             try:
                 # Inject context and session as first arguments

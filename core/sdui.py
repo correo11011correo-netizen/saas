@@ -17,8 +17,38 @@ class SDUIEngine:
 
     def get_boot_manifest(self, session: Session, context: TenantContext) -> dict[str, Any]:
         """
-        Genera el contrato de arranque completo para la APK.
+        Genera el contrato de arranque, delegando según el rol.
         """
+        if context.role == "superadmin":
+            return self.get_superadmin_manifest(session, context)
+        elif context.role == "admin":
+            return self.get_business_admin_manifest(session, context)
+        else:
+            return self.get_employee_manifest(session, context)
+
+    def get_superadmin_manifest(self, session: Session, context: TenantContext) -> dict[str, Any]:
+        return {
+            "user": {"role": "superadmin", "plan": "enterprise"},
+            "theme": {"primary_color": "#2C3E50", "secondary_color": "#ECF0F1", "dark_mode": True},
+            "dock": [
+                {"id": "tenants", "label": "Negocios", "icon": "building"},
+                {"id": "billing", "label": "Pagos Globales", "icon": "credit_card"},
+                {"id": "analytics", "label": "Métricas SaaS", "icon": "chart"},
+            ],
+            "layout": {"home": [{"component": "AdminTenantTable", "props": {}}]},
+        }
+
+    def get_business_admin_manifest(self, session: Session, context: TenantContext) -> dict[str, Any]:
+        # Aquí se mantiene la lógica original de layouts dinámicos por tenant
+        return self._get_tenant_manifest(session, context)
+
+    def get_employee_manifest(self, session: Session, context: TenantContext) -> dict[str, Any]:
+        # Similar a admin pero con filtrado estricto de componentes
+        manifest = self._get_tenant_manifest(session, context)
+        # TODO: Implementar lógica de filtrado de componentes por permisos
+        return manifest
+
+    def _get_tenant_manifest(self, session: Session, context: TenantContext) -> dict[str, Any]:
         # 1. Tema Visual
         theme = (
             session.execute(
@@ -28,38 +58,25 @@ class SDUIEngine:
             .first()
         )
 
-        # 2. Layout de la Pantalla Principal (Home)
+        # 2. Layout
         home_layout = (
             session.execute(
-                text(
-                    "SELECT layout_json FROM ui_layouts WHERE tenant_id = :tid AND screen_id = 'home'"
-                ),
+                text("SELECT layout_json FROM ui_layouts WHERE tenant_id = :tid AND screen_id = 'home'"),
                 {"tid": context.tenant_id},
             )
             .mappings()
             .first()
         )
 
-        # 3. Matriz de Permisos (Comandos permitidos)
-        # Aquí podríamos listar los comandos del dispatcher que el usuario puede usar
-        permissions = []
-        # (En una impl. real, filtraríamos los comandos registrados en el dispatcher según el rol)
-
         return {
-            "user": {
-                "name": "Usuario",  # Debería venir del contexto/DB
-                "role": context.role,
-                "plan": context.plan,
-            },
-            "theme": dict(theme)
-            if theme
-            else {"primary_color": "#000000", "secondary_color": "#FFFFFF", "dark_mode": False},
+            "user": {"role": context.role, "plan": context.plan},
+            "theme": dict(theme) if theme else {"primary_color": "#000000", "secondary_color": "#FFFFFF", "dark_mode": False},
             "layout": {
                 "home": home_layout["layout_json"] if home_layout else [],
-                "dock": [],  # Configuración de la barra inferior
+                "dock": [{"id": "sales", "label": "Ventas", "icon": "cart"}], # Placeholder
             },
-            "permissions": permissions,
         }
+
 
 
 sdui_engine = SDUIEngine()
