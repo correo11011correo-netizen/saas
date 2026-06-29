@@ -96,6 +96,12 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
+@app.get("/api/test-error")
+async def test_error():
+    logger.info("Test log: triggering an error")
+    raise Exception("This is a test error for logging verification")
+
+
 # Register Webhook Router
 app.include_router(webhook_router)
 
@@ -297,4 +303,4 @@ app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     logger.info(f"--- SERVIDOR LEVANTANDO EN PUERTO: {port} ---")
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=port, log_config=None)
