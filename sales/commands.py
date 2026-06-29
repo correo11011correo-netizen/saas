@@ -13,6 +13,7 @@ if not BASE_URL:
     raise Exception("BASE_URL environment variable is required for Mercado Pago notifications")
 
 
+class SalesCommandHandler:
     @command(
         name="sales.cobrar",
         description="Processes a sale, updates stock and registers the payment.",
