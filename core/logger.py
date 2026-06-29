@@ -1,8 +1,9 @@
 import logging
+import sys
 
 
 class SafeFormatter(logging.Formatter):
-    """Formateador que maneja campos faltantes en el record."""
+    """Formateador que asegura que los campos de contexto existan."""
 
     def format(self, record):
         if not hasattr(record, "tenant_id"):
@@ -13,22 +14,23 @@ class SafeFormatter(logging.Formatter):
 
 
 def setup_logging():
-    # Crear un manejador que imprima a stdout
-    handler = logging.StreamHandler()
+    # Usar sys.stdout para asegurar compatibilidad con logs de contenedores/Railway
+    handler = logging.StreamHandler(sys.stdout)
 
-    # Formato seguro
+    # Formato con detalle adicional de archivo y línea para facilitar debug
     formatter = SafeFormatter(
-        "%(asctime)s - %(name)s - %(levelname)s - [%(tenant_id)s] [%(user_id)s] - %(message)s"
+        "%(asctime)s - %(name)s - %(levelname)s - [%(tenant_id)s] [%(user_id)s] - %(message)s (%(filename)s:%(lineno)d)"
     )
     handler.setFormatter(formatter)
 
-    # Configurar el logger raíz
     root_logger = logging.getLogger()
+
+    # Nivel INFO para producción, pero con capacidad de subir a DEBUG si se necesita
     root_logger.setLevel(logging.INFO)
 
-    # Limpiar manejadores existentes para evitar duplicados
-    if root_logger.hasHandlers():
-        root_logger.handlers.clear()
+    # Limpiar manejadores existentes
+    for h in root_logger.handlers[:]:
+        root_logger.removeHandler(h)
 
     root_logger.addHandler(handler)
 

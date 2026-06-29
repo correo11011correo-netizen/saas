@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SaaS PoC - Navegación Dinámica</title>
+    <link rel="stylesheet" href="css/global.css">
+    <!-- Lucide Icons for a professional look -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+    <div id="app">
+        <!-- PoC Simulator Bar: Not part of the real app, only for study -->
+        <div id="poc-simulator">
+            <strong>SIMULADOR de Rol:</strong>
+            <select id="role-selector">
+                <option value="employee">Empleado</option>
+                <option value="owner">Dueño (Admin)</option>
+                <option value="superadmin">SuperAdmin</option>
+            </select>
+            <span id="current-user-display">Detectando usuario...</span>
+        </div>
+
+        <header id="main-header">
+            <div class="brand">SaaS <span>Dynamic</strong></div>
+            <div id="user-menu-container"></div>
+        </header>
+
+        <div id="layout-wrapper">
+            <!-- Central Hub: Main Module Icons -->
+            <main id="hub-container" class="hub-grid"></main>
+
+            <!-- Module View: Content area -->
+            <section id="module-container" class="hidden">
+                <div class="module-header">
+                    <button id="btn-back">← Volver</button>
+                    <h1 id="module-title">Módulo</h1>
+                </div>
+                <div id="panel-content">
+                    <!-- Dynamic Content Injected Here -->
+                </div>
+            </section>
+        </div>
+
+        <!-- Bottom Dock: Action Buttons -->
+        <nav id="main-dock" class="dock-bar hidden"></nav>
+    </div>
+
+    <!-- Core Scripts: Sequence is important -->
+    <script src="js/core/api.js"></script>
+    <script src="js/core/session.js"></script>
+    <script src="js/core/ui.js"></script>
+    <script src="js/core/app.js"></script>
+    <script src="js/core/boot.js"></script>
+</body>
+</html>

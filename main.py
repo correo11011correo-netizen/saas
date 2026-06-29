@@ -3,7 +3,8 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import uvicorn
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -26,6 +27,8 @@ from sales.commands import sales_commands
 from stock.commands import stock_commands
 from stock.sync import stock_sync_commands
 from whatsapp.commands import bot_manager_commands, whatsapp_commands
+
+# ... (imports existentes)
 
 # Configure global logging
 logger = setup_logging()
@@ -75,6 +78,23 @@ app = FastAPI(
     description="Multi-tenant Command Execution API",
     lifespan=lifespan,
 )
+
+
+# Global Exception Handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    # Registrar el error con nivel CRITICAL y stack trace completo
+    logger.critical(f"Unhandled exception: {exc}", exc_info=True)
+
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "success": False,
+            "error": "Internal server error occurred.",
+            "code": "INTERNAL_SERVER_ERROR",
+        },
+    )
+
 
 # Register Webhook Router
 app.include_router(webhook_router)
