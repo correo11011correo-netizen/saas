@@ -22,8 +22,37 @@ class AuthService:
         self, session: Session, email: str, password: str, business_name: str, plan: str = "free"
     ) -> dict:
         try:
+            # --- SCHEMA INTEGRITY GUARD ---
+            # Asegura la existencia de tablas críticas antes de operar.
+            session.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS saas_plans (plan_id VARCHAR(50) PRIMARY KEY, name VARCHAR(100) NOT NULL, monthly_price DECIMAL(12,2) DEFAULT 0, features JSONB DEFAULT '[]');"
+                )
+            )
+            session.execute(
+                text(
+                    "INSERT INTO saas_plans (plan_id, name, monthly_price) VALUES ('free', 'Plan Gratuito', 0.0) ON CONFLICT DO NOTHING;"
+                )
+            )
+            session.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS tenants (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name VARCHAR(255) NOT NULL, status VARCHAR(50) DEFAULT 'active', created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, webhook_secret VARCHAR(255) UNIQUE, plan VARCHAR(50) DEFAULT 'free', business_category VARCHAR(100) DEFAULT 'general');"
+                )
+            )
+            session.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS users (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), email VARCHAR(255) UNIQUE NOT NULL, password_hash VARCHAR(255) NOT NULL, role VARCHAR(50) DEFAULT 'employee', tenant_id UUID REFERENCES tenants(id));"
+                )
+            )
+            session.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS cash_box (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id UUID REFERENCES tenants(id), abierta BOOLEAN DEFAULT false, efectivo_inicial DECIMAL(12,2) DEFAULT 0, ventas_efectivo DECIMAL(12,2) DEFAULT 0, ventas_digital DECIMAL(12,2) DEFAULT 0, hora_apertura TIMESTAMP WITH TIME ZONE);"
+                )
+            )
+            session.commit()
+            # ------------------------------
+
             # 1. Validar que el plan existe en el catálogo global
-            # Si el plan es 'free', permitimos el registro incluso si hay un error temporal en la tabla de planes
             plan_check = session.execute(
                 text("SELECT 1 FROM saas_plans WHERE plan_id = :pid"),
                 {"pid": plan},
