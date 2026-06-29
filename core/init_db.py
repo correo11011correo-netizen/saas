@@ -42,6 +42,21 @@ def init_db():
                 """,
             )
 
+            # 3. Create Users Table (MOVED UP)
+            run_query(
+                cur,
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    email VARCHAR(255) UNIQUE NOT NULL,
+                    password_hash VARCHAR(255) NOT NULL,
+                    role VARCHAR(50) DEFAULT 'employee',
+                    tenant_id UUID REFERENCES tenants(id)
+                );
+                """,
+            )
+            run_query(cur, "CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);")
+
             # Add webhook_secret, plan and business_category if they don't exist
             run_query(
                 cur,
@@ -282,27 +297,12 @@ def init_db():
                 """,
             )
 
-            # 3. Update Users Table
-            run_query(
-                cur,
-                """
-                CREATE TABLE IF NOT EXISTS users (
-                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    email VARCHAR(255) UNIQUE NOT NULL,
-                    password_hash VARCHAR(255) NOT NULL,
-                    role VARCHAR(50) DEFAULT 'employee'
-                );
-                """,
-            )
+            # 3. Alter Existing Tables
             run_query(
                 cur,
                 """
                 DO $$
                 BEGIN
-                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='tenant_id') THEN
-                        ALTER TABLE users ADD COLUMN tenant_id UUID REFERENCES tenants(id);
-                        CREATE INDEX idx_users_tenant ON users(tenant_id);
-                    END IF;
                     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='whatsapp_sessions' AND column_name='session_data') THEN
                         ALTER TABLE whatsapp_sessions ADD COLUMN session_data JSONB DEFAULT '{}';
                     END IF;
