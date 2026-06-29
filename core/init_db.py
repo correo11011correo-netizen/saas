@@ -74,12 +74,14 @@ def init_db():
             conn = psycopg2.connect(DB_URL)
             conn.autocommit = True
             cur = conn.cursor()
+            cur.execute("SELECT pg_advisory_lock(123456789)")
 
             # ... (Todo el código de creación de tablas se mantiene igual hasta el final) ...
             # [Sustitución del final de la función init_db]
 
             # 5. Seed Initial Data
             seed_initial_data(cur)
+            cur.execute("SELECT pg_advisory_unlock(123456789)")
 
             logger.info("Database infrastructure initialized and seeded successfully.")
             return
