@@ -17,6 +17,7 @@ from core.credentials import credentials_commands
 from core.crm_commands import crm_commands
 from core.dispatcher import dispatcher
 from core.logger import setup_logging
+from core.migrator import run_resilient_migrations
 from core.module_entitlements import module_entitlement_service
 from core.saas_admin import saas_admin_commands
 from core.sdui import sdui_engine
@@ -41,6 +42,13 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 1. Ejecutar migraciones resilientes
+    try:
+        run_resilient_migrations()
+    except Exception as e:
+        logger.critical(f"❌ Error crítico en migraciones: {e}")
+        raise e
+
     # 2. Register all command handlers
     dispatcher.register_handler(core_commands)
     dispatcher.register_handler(credentials_commands)
