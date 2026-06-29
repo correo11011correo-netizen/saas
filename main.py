@@ -4,7 +4,6 @@ from typing import Any
 
 import uvicorn
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -84,22 +83,6 @@ app.include_router(webhook_router)
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
 
-@app.get("/")
-async def read_index():
-    from fastapi.responses import FileResponse
-
-    return FileResponse("frontend/index.html")
-
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
 # Dependency to get DB session
 def get_db():
     db = SessionLocal()
@@ -107,6 +90,19 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+@app.get("/api/health")
+def health_check(db=Depends(get_db)):
+    """
+    Endpoint para verificación de salud. Usado por Railway para despliegues Zero-Downtime.
+    """
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        raise HTTPException(status_code=503, detail="Database Down")
+    return {"status": "ok"}
 
 
 # Dependency to get current tenant context from JWT
