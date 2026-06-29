@@ -49,6 +49,36 @@ class AuthService:
                     "CREATE TABLE IF NOT EXISTS cash_box (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id UUID REFERENCES tenants(id), abierta BOOLEAN DEFAULT false, efectivo_inicial DECIMAL(12,2) DEFAULT 0, ventas_efectivo DECIMAL(12,2) DEFAULT 0, ventas_digital DECIMAL(12,2) DEFAULT 0, hora_apertura TIMESTAMP WITH TIME ZONE);"
                 )
             )
+            session.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS credentials (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id UUID REFERENCES tenants(id), service_name VARCHAR(100), account_alias VARCHAR(100), api_key TEXT, secret TEXT, metadata JSONB);"
+                )
+            )
+            session.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS bot_profiles (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id UUID REFERENCES tenants(id), name VARCHAR(100) NOT NULL, capabilities JSONB, is_active BOOLEAN DEFAULT TRUE, created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP);"
+                )
+            )
+            session.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS bot_settings (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id UUID REFERENCES tenants(id), bot_profile_id UUID REFERENCES bot_profiles(id), bot_name VARCHAR(100), welcome_message TEXT, farewell_message TEXT, handoff_message TEXT, support_email VARCHAR(255), is_global_active BOOLEAN DEFAULT TRUE, updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP);"
+                )
+            )
+            session.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS bot_nodes (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id UUID REFERENCES tenants(id), bot_profile_id UUID REFERENCES bot_profiles(id), name VARCHAR(100) NOT NULL, prompt TEXT NOT NULL);"
+                )
+            )
+            session.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS bot_options (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id UUID REFERENCES tenants(id), node_id UUID REFERENCES bot_nodes(id), label VARCHAR(100) NOT NULL, next_node_id UUID, action VARCHAR(100));"
+                )
+            )
+            session.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS frontend_manifest (id SERIAL PRIMARY KEY, tenant_id UUID REFERENCES tenants(id), module VARCHAR(100) NOT NULL, version VARCHAR(50) NOT NULL, assets JSONB NOT NULL, active BOOLEAN DEFAULT true, updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP);"
+                )
+            )
             session.commit()
             # ------------------------------
 
