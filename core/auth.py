@@ -9,6 +9,8 @@ import jwt
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from core.logger import logger
+
 from .context import TenantContext
 
 SECRET_KEY = os.getenv("JWT_SECRET", "OMNICORE_FALLBACK_SECRET_KEY_CHANGE_IN_PROD")
@@ -98,6 +100,7 @@ class AuthService:
             }
         except Exception as e:
             session.rollback()
+            logger.exception("Registration failed: %s", e)
             return {"success": False, "error": str(e)}
 
     def _apply_onboarding_blueprint(

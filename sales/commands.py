@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from core.context import TenantContext
 from core.decorators import command
+from core.logger import logger
 from core.types import ServiceResponse
 
 BASE_URL = os.getenv("BASE_URL")
@@ -317,6 +318,7 @@ class SalesCommandHandler:
             return ServiceResponse.success_res(message="Payment confirmed and stock updated.")
         except Exception as e:
             session.rollback()
+            logger.exception("Payment confirmation error: %s", e)
             return ServiceResponse.error_res(str(e), "CONFIRM_PAYMENT_ERROR")
 
     @command(

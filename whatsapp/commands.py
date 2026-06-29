@@ -39,6 +39,8 @@ class WhatsappCommandHandler:
                 data=[dict(row) for row in result], message="Settings retrieved."
             )
         except Exception as e:
+            session.rollback()
+            logger.exception("Bot settings error: %s", e)
             return ServiceResponse.error_res(f"Error: {str(e)}", "GET_SETTINGS_ERROR")
 
     @command(
