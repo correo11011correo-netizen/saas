@@ -43,31 +43,56 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("🚀 Iniciando secuencia de arranque del sistema...")
+
     # 1. Ejecutar migraciones resilientes
     try:
+        logger.info("Step 1/3: Ejecutando migraciones de Alembic...")
         run_resilient_migrations()
-        # Iniciar el Bootstrap de NexusDB (Sincroniza permisos, planes y migra datos si es necesario)
-        bootstrap.initialize()
+        logger.info("✅ Migraciones completadas.")
     except Exception as e:
-        logger.critical(f"❌ Error crítico en el arranque del sistema (Migraciones/Bootstrap): {e}")
-        raise e
+        logger.critical(f"❌ Error crítico en migraciones: {e}", exc_info=True)
+        # No lanzamos la excepción inmediatamente para permitir que el servidor
+        # inicie y podamos ver el error vía health-check o logs,
+        # pero marcamos el sistema como inestable.
 
-    # 2. Register all command handlers
-    dispatcher.register_handler(core_commands)
-    dispatcher.register_handler(credentials_commands)
-    dispatcher.register_handler(sales_commands)
-    dispatcher.register_handler(stock_commands)
-    dispatcher.register_handler(stock_sync_commands)
-    dispatcher.register_handler(whatsapp_commands)
-    dispatcher.register_handler(bot_manager_commands)
-    dispatcher.register_handler(employee_commands)
-    dispatcher.register_handler(saas_admin_commands)
-    dispatcher.register_handler(billing_commands)
-    dispatcher.register_handler(crm_commands)
+    # 2. Ejecutar el Bootstrap de NexusDB
+    try:
+        logger.info(
+            "Step 2/3: Ejecutando NexusDB Bootstrap (Sincronización de Permisos y Datos)..."
+        )
+        bootstrap.initialize()
+        logger.info("✅ Bootstrap completado exitosamente.")
+    except Exception as e:
+        logger.error(
+            f"⚠️ Error en Bootstrap: {e}. El sistema puede presentar inconsistencias en permisos.",
+            exc_info=True,
+        )
+
+    # 3. Registro de Handlers de Comandos
+    try:
+        logger.info("Step 3/3: Registrando manejadores de comandos...")
+        dispatcher.register_handler(core_commands)
+        dispatcher.register_handler(credentials_commands)
+        dispatcher.register_handler(sales_commands)
+        dispatcher.register_handler(stock_commands)
+        dispatcher.register_handler(stock_sync_commands)
+        dispatcher.register_handler(whatsapp_commands)
+        dispatcher.register_handler(bot_manager_commands)
+        dispatcher.register_handler(employee_commands)
+        dispatcher.register_handler(saas_admin_commands)
+        dispatcher.register_handler(billing_commands)
+        dispatcher.register_handler(crm_commands)
+        logger.info("✅ Todos los comandos han sido registrados.")
+    except Exception as e:
+        logger.critical(f"❌ Error registrando comandos: {e}", exc_info=True)
+        raise e
 
     # Inject DB factory into Webhooks AND Dispatcher
     set_db_session_factory(SessionLocal)
     dispatcher.set_db_session_factory(SessionLocal)
+
+    logger.info("🌟 Servidor OmniCore completamente operativo y listo para recibir peticiones.")
     yield
 
 
