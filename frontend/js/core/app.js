@@ -11,16 +11,25 @@ const App = {
     },
 
     async init() {
-        await this.syncManifest();
-        this.renderHub();
-        this.bindEvents();
+        try {
+            // 1. Inicializar Capas de Datos y Sincronización
+            await LocalStore.init();
+            await SyncEngine.init();
 
-        // Auto-sync offline queue on startup
-        window.addEventListener('online', () => SyncManager.processQueue());
-        SyncManager.processQueue();
+            await this.syncManifest();
+            this.renderHub();
+            this.bindEvents();
 
-        // Hot Update: Verificar cambios en el manifiesto cada 60 segundos
-        setInterval(() => this.checkHotUpdate(), 60000);
+            // Auto-sync offline queue on startup
+            window.addEventListener('online', () => SyncEngine.processQueue());
+            SyncEngine.processQueue();
+
+            // Hot Update: Verificar cambios en el manifiesto cada 60 segundos
+            setInterval(() => this.checkHotUpdate(), 60000);
+        } catch (e) {
+            console.error('Init Error:', e);
+            UI.toast('Error al iniciar la aplicación', 'error');
+        }
     },
 
     async checkHotUpdate() {

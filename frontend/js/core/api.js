@@ -9,7 +9,6 @@
 const API_BASE_URL = '';
 
 const API = {
-const API = {
     /**
      * Ejecuta un comando universal con soporte para modo Offline.
      * Si no hay conexión, el comando se encola para sincronización posterior.
@@ -20,7 +19,7 @@ const API = {
         } catch (error) {
             // Si el error es de conexión (TypeError: Failed to fetch), encolamos la acción
             if (error.message.includes('Failed to fetch') || !navigator.onLine) {
-                SyncManager.enqueue(command, params);
+                await SyncEngine.enqueue(command, params);
                 return {
                     success: true,
                     offline: true,
@@ -33,7 +32,7 @@ const API = {
 
     /**
      * Versión directa de ejecución sin interceptor de cola.
-     * Usado internamente por SyncManager.
+     * Usado internamente por SyncEngine.
      */
     async executeDirect(command, params = {}) {
         const token = localStorage.getItem('omnicore_token');
