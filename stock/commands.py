@@ -211,5 +211,36 @@ class StockCommandHandler:
         except Exception as e:
             return ServiceResponse.error_res(f"Error fetching product: {str(e)}", "STOCK_GET_ERROR")
 
+    @command(
+        name="business.monitor.critical_stock",
+        description="Retrieves products with quantity below a critical threshold (default 5).",
+        params_model={"threshold": "int"},
+    )
+    def get_critical_stock(
+        self,
+        session: Session,
+        context: TenantContext,
+        threshold: int = 5,
+    ) -> ServiceResponse:
+        try:
+            result = (
+                session.execute(
+                    text(
+                        "SELECT code, name, quantity FROM products WHERE tenant_id = :tid AND quantity <= :threshold ORDER BY quantity ASC"
+                    ),
+                    {"tid": context.tenant_id, "threshold": threshold},
+                )
+                .mappings()
+                .all()
+            )
+            return ServiceResponse.success_res(
+                data=[dict(row) for row in result],
+                message=f"Found {len(result)} products below threshold {threshold}.",
+            )
+        except Exception as e:
+            return ServiceResponse.error_res(
+                f"Error checking critical stock: {str(e)}", "STOCK_CRITICAL_ERROR"
+            )
+
 
 stock_commands = StockCommandHandler()

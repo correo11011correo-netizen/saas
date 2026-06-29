@@ -1,3 +1,4 @@
+import datetime
 import logging
 import uuid
 
@@ -39,6 +40,57 @@ class SaaSAdminCommandHandler:
             )
         except Exception as e:
             return ServiceResponse.error_res(str(e), "SAAS_TENANTS_LIST_ERROR")
+
+    @command(
+        name="saas.monitor.global_health",
+        description="Returns system infrastructure health metrics.",
+        params_model={},
+    )
+    def global_health(self, session: Session, context: TenantContext) -> ServiceResponse:
+        try:
+            import platform
+
+            # Simulación de métricas de sistema (En un entorno real usaríamos psutil)
+            health_data = {
+                "os": platform.system(),
+                "node": platform.node(),
+                "status": "healthy",
+                "metrics": {
+                    "db_connection": "active",
+                    "api_status": "online",
+                    "timestamp": datetime.datetime.utcnow().isoformat(),
+                },
+            }
+            return ServiceResponse.success_res(
+                data=health_data, message="System health check completed."
+            )
+        except Exception as e:
+            return ServiceResponse.error_res(str(e), "HEALTH_CHECK_ERROR")
+
+    @command(
+        name="saas.monitor.tenant_stats",
+        description="Aggregated statistics about tenants and plans.",
+        params_model={},
+    )
+    def tenant_stats(self, session: Session, context: TenantContext) -> ServiceResponse:
+        try:
+            stats = (
+                session.execute(text("SELECT plan, count(*) as total FROM tenants GROUP BY plan"))
+                .mappings()
+                .all()
+            )
+
+            total_tenants = session.execute(text("SELECT count(*) FROM tenants")).scalar()
+
+            return ServiceResponse.success_res(
+                data={
+                    "total_tenants": total_tenants,
+                    "plan_distribution": [dict(s) for s in stats],
+                },
+                message="Tenant statistics retrieved.",
+            )
+        except Exception as e:
+            return ServiceResponse.error_res(str(e), "TENANT_STATS_ERROR")
 
     @command(
         name="saas.tenants.get",

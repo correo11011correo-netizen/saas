@@ -21,13 +21,17 @@ class AuthService:
     ) -> dict:
         try:
             # 1. Validar que el plan existe en el catálogo global
+            # Si el plan es 'free', permitimos el registro incluso si hay un error temporal en la tabla de planes
             plan_check = session.execute(
                 text("SELECT 1 FROM saas_plans WHERE plan_id = :pid"),
                 {"pid": plan},
             ).scalar()
 
-            if not plan_check:
-                return {"success": False, "error": f"Invalid plan: {plan}"}
+            if not plan_check and plan != "free":
+                return {
+                    "success": False,
+                    "error": f"Invalid plan: {plan}. Please use 'free' or contact support.",
+                }
 
             tenant_id = uuid.uuid4()
             webhook_secret = secrets.token_urlsafe(32)
@@ -40,7 +44,7 @@ class AuthService:
                     "id": tenant_id,
                     "name": business_name,
                     "secret": webhook_secret,
-                    "plan": plan,
+                    "plan": plan if plan_check else "free",
                 },
             )
             user_id = uuid.uuid4()
@@ -79,7 +83,7 @@ class AuthService:
                     },
                 )
             session.commit()
-            token = self.create_token(tenant_id, user_id, "admin", plan)
+            token = self.create_token(tenant_id, user_id, "admin", plan if plan_check else "free")
             return {
                 "success": True,
                 "token": token,
@@ -89,7 +93,7 @@ class AuthService:
                     "username": email,
                     "business_name": business_name,
                     "role": "admin",
-                    "plan": plan,
+                    "plan": plan if plan_check else "free",
                 },
             }
         except Exception as e:
@@ -176,7 +180,7 @@ class AuthService:
                 text(
                     """SELECT u.id, u.tenant_id, u.role, u.email, t.name as business_name, t.plan
                     FROM users u
-                    JOIN tenants t ON u.tenant_id = t.id
+                    LEFT JOIN tenants t ON u.tenant_id = t.id
                     WHERE u.email = :email AND u.password_hash = :hash"""
                 ),
                 {"email": email, "hash": password_hash},
@@ -186,6 +190,8 @@ class AuthService:
         )
         if not user:
             return None
+
+        # El tenant_id puede ser None para superadmin y support
         token = self.create_token(user["tenant_id"], user["id"], user["role"], user["plan"])
         return {
             "token": token,
@@ -193,9 +199,9 @@ class AuthService:
             "user_id": user["id"],
             "user": {
                 "username": user["email"],
-                "business_name": user["business_name"],
+                "business_name": user["business_name"] or "OmniCore System",
                 "role": user["role"],
-                "plan": user["plan"],
+                "plan": user["plan"] or "system",
             },
         }
 
@@ -204,7 +210,7 @@ class AuthService:
             "tenant_id": str(tenant_id) if tenant_id else "SYSTEM",
             "user_id": str(user_id),
             "role": role,
-            "plan": plan,
+            "plan": plan or "system",
             "exp": datetime.datetime.utcnow() + datetime.timedelta(days=7),
         }
         return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
@@ -218,7 +224,7 @@ class AuthService:
                 else None,
                 user_id=uuid.UUID(payload["user_id"]),
                 role=payload["role"],
-                plan=payload.get("plan", "free"),
+                plan=payload.get("plan", "system"),
             )
         except Exception:
             return None

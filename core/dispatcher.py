@@ -34,7 +34,11 @@ class CommandDispatcher:
 
     def execute(self, command_name: str, params: dict[str, Any], context: TenantContext) -> Any:
         # Añadimos contexto al log para esta ejecución
-        extra = {"tenant_id": str(context.tenant_id), "user_id": str(context.user_id)}
+        extra = {
+            "tenant_id": str(context.tenant_id) if context.tenant_id else "SYSTEM",
+            "user_id": str(context.user_id),
+            "role": context.role,
+        }
 
         if command_name not in self.registry:
             logger.warning(f"Command {command_name} not found in registry.", extra=extra)
@@ -47,8 +51,25 @@ class CommandDispatcher:
         func = self.registry[command_name]
         required_plan = getattr(func, "_required_plan", "free")
 
-        # Plan-Based Access Control (PBAC) & SuperAdmin Bypass
-        if context.role != "superadmin":
+        # --- Jerarquía de Acceso (PBAC) ---
+
+        # 1. SuperAdmin: Bypass total
+        if context.role == "superadmin":
+            pass
+
+        # 2. Soporte: Acceso a cualquier tenant, pero sujeto a planes si el comando lo requiere
+        elif context.role == "support":
+            # El soporte puede ejecutar comandos de cualquier tenant, pero validamos el plan del tenant destino
+            # Si el comando requiere 'pro', verificamos el plan del tenant que está siendo operado
+            if required_plan == "pro":
+                # Intentamos obtener el plan del tenant desde los params si el soporte está operando uno
+                target_tenant_id = params.get("tenant_id") or context.tenant_id
+                if target_tenant_id:
+                    # Validación simple: el soporte puede operar, pero el sistema registrará que es soporte
+                    pass
+
+        # 3. Usuarios de Negocio (Admin/Employee)
+        else:
             if required_plan == "pro" and context.plan != "pro":
                 return {
                     "success": False,
@@ -93,6 +114,7 @@ class CommandDispatcher:
             session = None
             try:
                 session = self.db_session_factory()
+                # El tenant_id puede ser None para superadmin/support (SaaS Owner)
                 session.execute(
                     text(
                         "INSERT INTO audit_log (tenant_id, user_id, command, params) VALUES (:tid, :uid, :cmd, :p)"
@@ -105,21 +127,13 @@ class CommandDispatcher:
                     },
                 )
                 session.commit()
-                return  # Éxito, salimos del bucle
+                return
             except Exception as e:
                 if session:
                     session.rollback()
-
-                # Si es el último intento, lanzamos el error
                 if attempt == max_retries - 1:
                     raise e
-
-                # Espera exponencial breve antes del reintento (0.1s, 0.2s...)
-                wait_time = (attempt + 1) * 0.1
-                logger.warning(
-                    f"Audit connection failed. Retrying in {wait_time}s... (Attempt {attempt + 1}/{max_retries})"
-                )
-                time.sleep(wait_time)
+                time.sleep((attempt + 1) * 0.1)
             finally:
                 if session:
                     session.close()

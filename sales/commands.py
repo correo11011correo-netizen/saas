@@ -319,5 +319,34 @@ class SalesCommandHandler:
             session.rollback()
             return ServiceResponse.error_res(str(e), "CONFIRM_PAYMENT_ERROR")
 
+    @command(
+        name="business.maintenance.cash_box_reset",
+        description="Forces a reset of the cash box. Use only in case of critical human error.",
+        params_model={},
+    )
+    def reset_cash_box(self, session: Session, context: TenantContext) -> ServiceResponse:
+        try:
+            # 1. Forzar cierre de la caja actual
+            session.execute(
+                text("UPDATE cash_box SET abierta = false WHERE tenant_id = :tid"),
+                {"tid": context.tenant_id},
+            )
+
+            # 2. Resetear valores financieros a cero
+            session.execute(
+                text(
+                    "UPDATE cash_box SET efectivo_inicial = 0, ventas_efectivo = 0, ventas_digital = 0 WHERE tenant_id = :tid"
+                ),
+                {"tid": context.tenant_id},
+            )
+
+            session.commit()
+            return ServiceResponse.success_res(
+                message="Cash box has been forcefully reset. All totals cleared."
+            )
+        except Exception as e:
+            session.rollback()
+            return ServiceResponse.error_res(str(e), "CASH_BOX_RESET_ERROR")
+
 
 sales_commands = SalesCommandHandler()
