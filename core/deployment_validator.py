@@ -52,23 +52,34 @@ class DeploymentValidator:
 
     def check_migration_lock(self) -> bool:
         """
-        Verifica si hay transacciones largas que puedan bloquear las migraciones.
+        Verifica si hay transacciones que puedan bloquear las migraciones.
+        Detecta tanto transacciones activas largas como sesiones 'idle in transaction'.
         """
         try:
             with self.engine.connect() as conn:
-                # Consultar transacciones activas con más de 30 segundos
+                # Consultar transacciones que pueden bloquear:
+                # 1. Activas por más de 30 segundos
+                # 2. En estado 'idle in transaction' (esto es crítico en Postgres)
                 query = text("""
-                    SELECT pid FROM pg_stat_activity
-                    WHERE state = 'active'
-                    AND (now() - xact_start) > interval '30 seconds'
-                    AND query NOT LIKE '%pg_stat_activity%';
+                    SELECT pid, state, now() - xact_start as duration
+                    FROM pg_stat_activity
+                    WHERE (state = 'active' AND (now() - xact_start) > interval '30 seconds')
+                       OR (state = 'idle in transaction')
+                       AND query NOT LIKE '%pg_stat_activity%';
                 """)
                 result = conn.execute(query).fetchall()
+
                 if result:
                     logger.warning(
-                        f"  - Bloqueos detectados: {len(result)} transacciones largas activas. Las migraciones podrían quedar colgadas."
+                        f"⚠️ Bloqueos potenciales detectados: {len(result)} sesiones conflictivas."
+                    )
+                    for row in result:
+                        logger.warning(f"  - PID {row[0]}: Estado '{row[1]}', Duración: {row[2]}")
+                    logger.warning(
+                        "Sugerencia: Reinicia la base de datos o mata los PIDs indicados para liberar las tablas."
                     )
                     return False
+
                 logger.info("  - Bloqueos de Migración: Ninguno detectado")
                 return True
         except Exception as e:
