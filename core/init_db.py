@@ -280,8 +280,24 @@ def init_db():
                 """,
             )
 
-            # 2.3 Create Bot Assignments Table (The Connection Link)
+            # 2.4 Create Credentials Table (Explicitly, before Assignments)
+            run_query(
+                cur,
+                """
+                CREATE TABLE IF NOT EXISTS credentials (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    tenant_id UUID REFERENCES tenants(id),
+                    service_name VARCHAR(100),
+                    account_alias VARCHAR(100),
+                    api_key TEXT,
+                    secret TEXT,
+                    metadata JSONB,
+                    UNIQUE (tenant_id, service_name, account_alias)
+                );
+                """,
+            )
 
+            # 2.3 Create Bot Assignments Table (The Connection Link)
             run_query(
                 cur,
                 """
