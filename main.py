@@ -43,16 +43,6 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Auto-inicializar la base de datos (Asegurar tablas y columnas)
-    try:
-        from core.init_db import init_db
-
-        logger.info("🚀 Sincronizando estructura de base de datos...")
-        init_db()
-        logger.info("✅ Base de datos lista y sincronizada.")
-    except Exception:
-        logger.exception("❌ Error crítico inicializando la base de datos")
-
     # 2. Register all command handlers
     dispatcher.register_handler(core_commands)
     dispatcher.register_handler(credentials_commands)
