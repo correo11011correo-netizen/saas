@@ -23,6 +23,7 @@ from core.saas_admin import saas_admin_commands
 from core.sdui import sdui_engine
 from core.webhooks import router as webhook_router
 from core.webhooks import set_db_session_factory
+from db_engine.bootstrap import bootstrap
 from employees.commands import employee_commands
 from sales.commands import sales_commands
 from stock.commands import stock_commands
@@ -45,8 +46,10 @@ async def lifespan(app: FastAPI):
     # 1. Ejecutar migraciones resilientes
     try:
         run_resilient_migrations()
+        # Iniciar el Bootstrap de NexusDB (Sincroniza permisos, planes y migra datos si es necesario)
+        bootstrap.initialize()
     except Exception as e:
-        logger.critical(f"❌ Error crítico en migraciones: {e}")
+        logger.critical(f"❌ Error crítico en el arranque del sistema (Migraciones/Bootstrap): {e}")
         raise e
 
     # 2. Register all command handlers
