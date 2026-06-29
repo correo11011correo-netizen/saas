@@ -57,9 +57,6 @@ def init_db():
                     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tenants' AND column_name='business_category') THEN
                         ALTER TABLE tenants ADD COLUMN business_category VARCHAR(100) DEFAULT 'general';
                     END IF;
-                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='whatsapp_sessions' AND column_name='session_data') THEN
-                        ALTER TABLE whatsapp_sessions ADD COLUMN session_data JSONB DEFAULT '{}';
-                    END IF;
                 END $$;
                 """,
             )
@@ -305,6 +302,9 @@ def init_db():
                     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='tenant_id') THEN
                         ALTER TABLE users ADD COLUMN tenant_id UUID REFERENCES tenants(id);
                         CREATE INDEX idx_users_tenant ON users(tenant_id);
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='whatsapp_sessions' AND column_name='session_data') THEN
+                        ALTER TABLE whatsapp_sessions ADD COLUMN session_data JSONB DEFAULT '{}';
                     END IF;
                 END $$;
                 """,

@@ -11,7 +11,7 @@ from core.types import ServiceResponse
 logger = logging.getLogger("OmniCore.Credentials")
 BASE_URL = os.getenv("BASE_URL")
 if not BASE_URL:
-    raise Exception("BASE_URL environment variable is required for generating webhook URLs")
+    logger.warning("BASE_URL environment variable is not set. Webhook generation will fail.")
 
 
 class CredentialsCommandHandler:
