@@ -27,11 +27,10 @@ from sales.commands import sales_commands
 from stock.commands import stock_commands
 from stock.sync import stock_sync_commands
 from whatsapp.commands import bot_manager_commands, whatsapp_commands
+from core.logger import setup_logging
 
-# Configure global logging to ensure custom loggers print to stdout
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# Configure global logging
+logger = setup_logging()
 
 # Database Configuration
 DB_URL = os.getenv("DATABASE_URL")
@@ -47,11 +46,11 @@ async def lifespan(app: FastAPI):
     try:
         from core.init_db import init_db
 
-        print("🚀 Sincronizando estructura de base de datos...")
+        logger.info("🚀 Sincronizando estructura de base de datos...")
         init_db()
-        print("✅ Base de datos lista y sincronizada.")
+        logger.info("✅ Base de datos lista y sincronizada.")
     except Exception as e:
-        print(f"❌ Error crítico inicializando la base de datos: {e}")
+        logger.exception("❌ Error crítico inicializando la base de datos")
 
     # 2. Register all command handlers
     dispatcher.register_handler(core_commands)
@@ -273,5 +272,5 @@ app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
-    print(f"--- SERVIDOR LEVANTANDO EN PUERTO: {port} ---")
+    logger.info(f"--- SERVIDOR LEVANTANDO EN PUERTO: {port} ---")
     uvicorn.run(app, host="0.0.0.0", port=port)

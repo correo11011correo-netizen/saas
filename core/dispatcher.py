@@ -5,36 +5,21 @@ from collections.abc import Callable
 from typing import Any
 
 from .context import TenantContext
+from core.logger import logger as system_logger
 
-logger = logging.getLogger("OmniCore.Dispatcher")
+logger = system_logger.getChild("Dispatcher")
 
 
 class CommandDispatcher:
     def __init__(self, db_session_factory=None):
-        self.registry: dict[str, Callable] = {}
-        self.db_session_factory = db_session_factory
-
-    def set_db_session_factory(self, factory):
-        self.db_session_factory = factory
-
-    def register_handler(self, handler: Any):
-        """
-        Scans a handler object for methods decorated with @command
-        and registers them.
-        """
-        for attr_name in dir(handler):
-            attr = getattr(handler, attr_name)
-            if hasattr(attr, "_is_command"):
-                cmd_name = attr._command_name
-                self.register(cmd_name, attr)
-
-    def register(self, name: str, func: Callable):
-        self.registry[name] = func
-
+...
     def execute(self, command_name: str, params: dict[str, Any], context: TenantContext) -> Any:
+        # Añadimos contexto al log para esta ejecución
+        extra = {"tenant_id": str(context.tenant_id), "user_id": str(context.user_id)}
+        
         if command_name not in self.registry:
             logger.warning(
-                f"Command {command_name} not found in registry. Available commands: {list(self.registry.keys())}"
+                f"Command {command_name} not found in registry.", extra=extra
             )
             return {
                 "success": False,
@@ -67,12 +52,12 @@ class CommandDispatcher:
                 try:
                     self._audit(context, command_name, params)
                 except Exception as audit_err:
-                    logger.error(f"Audit failed for {command_name}: {audit_err}")
+                    logger.error(f"Audit failed for {command_name}: {audit_err}", extra=extra)
 
                 return result
             except Exception as e:
                 session.rollback()
-                logger.exception(f"Error executing {command_name}: {e}")
+                logger.exception(f"Error executing {command_name}: {e}", extra=extra)
                 return {"success": False, "error": str(e), "code": "EXECUTION_ERROR"}
 
     def _audit(self, context: TenantContext, command: str, params: dict):
