@@ -12,7 +12,26 @@ logger = system_logger.getChild("Dispatcher")
 
 class CommandDispatcher:
     def __init__(self, db_session_factory=None):
-...
+        self.registry: dict[str, Callable] = {}
+        self.db_session_factory = db_session_factory
+
+    def set_db_session_factory(self, factory):
+        self.db_session_factory = factory
+
+    def register_handler(self, handler: Any):
+        """
+        Scans a handler object for methods decorated with @command
+        and registers them.
+        """
+        for attr_name in dir(handler):
+            attr = getattr(handler, attr_name)
+            if hasattr(attr, "_is_command"):
+                cmd_name = attr._command_name
+                self.register(cmd_name, attr)
+
+    def register(self, name: str, func: Callable):
+        self.registry[name] = func
+
     def execute(self, command_name: str, params: dict[str, Any], context: TenantContext) -> Any:
         # Añadimos contexto al log para esta ejecución
         extra = {"tenant_id": str(context.tenant_id), "user_id": str(context.user_id)}
