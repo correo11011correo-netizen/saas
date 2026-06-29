@@ -28,8 +28,6 @@ from stock.commands import stock_commands
 from stock.sync import stock_sync_commands
 from whatsapp.commands import bot_manager_commands, whatsapp_commands
 
-# ... (imports existentes)
-
 # Configure global logging
 logger = setup_logging()
 
@@ -60,7 +58,6 @@ async def lifespan(app: FastAPI):
     set_db_session_factory(SessionLocal)
     dispatcher.set_db_session_factory(SessionLocal)
     yield
-    # Clean up (if needed)
 
 
 app = FastAPI(
@@ -86,19 +83,6 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-@app.get("/api/test-error")
-async def test_error():
-    logger.info("Test log: triggering an error")
-    raise Exception("This is a test error for logging verification")
-
-
-# Register Webhook Router
-app.include_router(webhook_router)
-
-# Servir archivos estáticos del frontend
-app.mount("/static", StaticFiles(directory="frontend"), name="static")
-
-
 # Dependency to get DB session
 def get_db():
     db = SessionLocal()
@@ -106,19 +90,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-
-@app.get("/api/health")
-def health_check(db=Depends(get_db)):
-    """
-    Endpoint para verificación de salud. Usado por Railway para despliegues Zero-Downtime.
-    """
-    try:
-        db.execute(text("SELECT 1"))
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        raise HTTPException(status_code=503, detail="Database Down")
-    return {"status": "ok"}
 
 
 # Dependency to get current tenant context from JWT
@@ -142,6 +113,56 @@ def get_current_context(
     if not context:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     return context
+
+
+@app.post("/api/log-error")
+async def log_error(
+    payload: dict[str, Any],
+    context: TenantContext = Depends(get_current_context),
+    db=Depends(get_db),
+):
+    """
+    Endpoint para centralizar logs de errores del frontend y backend.
+    """
+    db.execute(
+        text(
+            "INSERT INTO error_logs (tenant_id, source, message, stack_trace) VALUES (:tid, :src, :msg, :st)"
+        ),
+        {
+            "tid": context.tenant_id,
+            "src": payload.get("source", "unknown"),
+            "msg": payload.get("message", ""),
+            "st": payload.get("stack_trace", ""),
+        },
+    )
+    db.commit()
+    return {"success": True}
+
+
+@app.get("/api/test-error")
+async def test_error():
+    logger.info("Test log: triggering an error")
+    raise Exception("This is a test error for logging verification")
+
+
+# Register Webhook Router
+app.include_router(webhook_router)
+
+# Servir archivos estáticos del frontend
+app.mount("/static", StaticFiles(directory="frontend"), name="static")
+
+
+@app.get("/api/health")
+def health_check(db=Depends(get_db)):
+    """
+    Endpoint para verificación de salud. Usado por Railway para despliegues Zero-Downtime.
+    """
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        raise HTTPException(status_code=503, detail="Database Down")
+    return {"status": "ok"}
 
 
 # --- SDUI ENDPOINT ---
@@ -283,12 +304,9 @@ def execute_command(
     return result
 
 
-# --- MIDDLEWARE DE LOGGING ---
-# Removed verbose request logging for production.
-
-
 # Montar frontend al final para que sirva como fallback y maneje rutas relativas
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))

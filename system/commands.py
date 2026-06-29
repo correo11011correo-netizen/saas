@@ -157,5 +157,29 @@ class SystemCommandHandler:
         except Exception as e:
             return ServiceResponse.error_res(f"Error listing users: {str(e)}", "USER_LIST_ERROR")
 
+    @command(
+        name="system.errors.get",
+        description="Retrieves the logged errors from the database.",
+        params_model={"limit": "int"},
+    )
+    def get_errors(
+        self, session: Session, context: TenantContext, limit: int = 20
+    ) -> ServiceResponse:
+        try:
+            # Solo superadmin o soporte pueden ver logs globales
+            if context.role in ["superadmin", "support"]:
+                query = "SELECT * FROM error_logs ORDER BY created_at DESC LIMIT :limit"
+                params = {"limit": limit}
+            else:
+                query = "SELECT * FROM error_logs WHERE tenant_id = :tid ORDER BY created_at DESC LIMIT :limit"
+                params = {"tid": context.tenant_id, "limit": limit}
+
+            result = session.execute(text(query), params).mappings().all()
+            return ServiceResponse.success_res(
+                data=[dict(row) for row in result], message="Errors retrieved."
+            )
+        except Exception as e:
+            return ServiceResponse.error_res(str(e), "GET_ERRORS_ERROR")
+
 
 system_commands = SystemCommandHandler()

@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 
 from core.database import Base
@@ -60,12 +60,12 @@ class UITheme(Base):
     logo_url = Column(String)
 
 
-class UILayout(Base):
-    __tablename__ = "ui_layouts"
+class ErrorLog(Base):
+    __tablename__ = "error_logs"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
-    screen_id = Column(String(50), nullable=False)
-    layout_json = Column(JSON, nullable=False)
-    order_index = Column(Integer, default=0)
-    is_active = Column(Boolean, default=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=True)
+    source = Column(String(50))  # 'frontend' o 'backend'
+    message = Column(Text)
+    stack_trace = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

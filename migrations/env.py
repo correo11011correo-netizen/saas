@@ -1,36 +1,27 @@
+import logging
 import os
 from logging.config import fileConfig
 
 from alembic import context
+from sqlalchemy import create_engine
 
 # add your model's MetaData object here
 # for 'autogenerate' support
 from core.database import Base
 
 target_metadata = Base.metadata
+logger = logging.getLogger("alembic.env")
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
 # Interpret the config file for Python logging.
-# This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode.
-
-    This configures the context with just a URL
-    and not an Engine, though an Engine is acceptable
-    here as well.  By skipping the Engine creation
-    we don't even need a DBAPI to be available.
-
-    Calls to context.execute() here emit the given string to the
-    script output.
-
-    """
     url = os.getenv("DATABASE_URL")
     context.configure(
         url=url,
@@ -44,10 +35,12 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
-    from sqlalchemy import create_engine
+    url = os.getenv("DATABASE_URL")
+    if not url:
+        logger.warning("DATABASE_URL no definida, saltando conexión en modo online.")
+        return
 
-    connectable = create_engine(os.getenv("DATABASE_URL"))
+    connectable = create_engine(url)
 
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)
