@@ -1,82 +1,83 @@
 /**
  * OMNICORE SYNC ENGINE
  * Gestor de cola de comandos y sincronización de datos.
- * Implementa el patrón 'Outbox' para garantizar la continuidad del negocio offline.
+ * Implementa el patrón 'Outbox' con priorización de comandos.
  */
 
 window.SyncEngine = {
     isOnline: navigator.onLine,
     isSyncing: false,
-    retryInterval: 5000, // 5 segundos
+    retryInterval: 5000,
+
+    // Mapa de Prioridades: Menor número = Mayor prioridad
+    // Asegura que la creación de entidades base ocurra antes que las transacciones
+    PRIORITY_MAP: {
+        'auth': 1,       // Login, tokens
+        'crm': 2,        // Creación de clientes
+        'stock': 3,      // Actualización de inventario
+        'sales': 4,      // Ventas y cobros
+        'whatsapp': 5,   // Configuración de bots
+        'system': 6,     // Logs y auditoría
+        'default': 10
+    },
 
     async init() {
         window.addEventListener('online', () => this.handleOnlineStatus(true));
         window.addEventListener('offline', () => this.handleOnlineStatus(false));
         this.isOnline = navigator.onLine;
-
-        // Iniciar ciclo de verificación de cola
         this.startSyncLoop();
-        console.log('🚀 SyncEngine Initialized');
+        console.log('🚀 SyncEngine Initialized with Priority System');
     },
 
     async handleOnlineStatus(online) {
         this.isOnline = online;
         UI.toast(online ? 'Conexión restablecida. Sincronizando...' : 'Modo offline activado', online ? 'success' : 'warning');
-        if (online) {
-            await this.processQueue();
-        }
+        if (online) await this.processQueue();
     },
 
     async enqueue(command, params) {
+        // Determinar categoría basada en el prefijo del comando (ej: 'sales.create' -> 'sales')
+        const category = command.split('.')[0];
+        const priority = this.PRIORITY_MAP[category] || this.PRIORITY_MAP['default'];
+
         const entry = {
             command,
             params,
+            category,
+            priority,
             timestamp: Date.now(),
             attempts: 0,
             status: 'pending'
         };
         await LocalStore.save('sync_queue', entry);
-        console.log(`📥 Command queued: ${command}`);
         return { queued: true, id: entry.id };
     },
 
     async processQueue() {
         if (!this.isOnline || this.isSyncing) return;
 
-        const queue = await LocalStore.getAll('sync_queue');
+        let queue = await LocalStore.getAll('sync_queue');
         if (queue.length === 0) return;
 
-        this.isSyncing = true;
-        console.log(`🔄 Syncing ${queue.length} pending commands...`);
+        // ORDENAMIENTO CRÍTICO:
+        // 1. Por Prioridad (Ascendente: auth primero)
+        // 2. Por Timestamp (Ascendente: el más antiguo primero)
+        queue.sort((a, b) => a.priority - b.priority || a.timestamp - b.timestamp);
 
-        // Procesamos secuencialmente para mantener la integridad (ej. Venta -> Stock)
+        this.isSyncing = true;
+        console.log(`🔄 Syncing ${queue.length} commands in priority order...`);
+
         for (const item of queue) {
             try {
-                // Intentamos ejecutar el comando directamente via API
-                // Usamos executeDirect para saltar el interceptor de cola y evitar bucles infinitos
                 await API.executeDirect(item.command, item.params);
-
-                // Si tiene éxito, eliminamos de la cola
                 await LocalStore.delete('sync_queue', item.id);
-                console.log(`✅ Synced: ${item.command}`);
-
-                // Notificar al sistema de tiempo real si es necesario
-                if (window.Realtime) {
-                    await window.Realtime.notifySync(item.command);
-                }
             } catch (e) {
                 console.error(`❌ Sync failed for ${item.command}:`, e);
-                // Incrementamos intentos. Si falla mucho, podemos marcarlo como 'error' para revisión manual
                 item.attempts++;
                 await LocalStore.save('sync_queue', item);
-
-                if (item.attempts > 5) {
-                    console.error(`🛑 Command ${item.command} failed too many times. Stopping queue.`);
-                    break;
-                }
+                if (item.attempts > 5) break;
             }
         }
-
         this.isSyncing = false;
     },
 

@@ -26,6 +26,7 @@ from core.commands import core_commands
 from core.context import TenantContext
 from core.credentials import credentials_commands
 from core.crm_commands import crm_commands
+from core.deployment_validator import DeploymentValidator
 from core.dev_admin_commands import dev_admin_commands
 from core.dispatcher import dispatcher
 from core.logger import setup_logging
@@ -59,6 +60,16 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🚀 Iniciando secuencia de arranque del sistema...")
+
+    # 0. Validación de Despliegue (Pre-flight)
+    try:
+        validator = DeploymentValidator(engine)
+        if not validator.validate_all():
+            logger.warning(
+                "⚠️ Advertencia: El sistema ha detectado problemas de infraestructura. Intenta reiniciar la DB si el arranque se congela."
+            )
+    except Exception as e:
+        logger.error(f"❌ Error crítico en el validador de despliegue: {e}")
 
     # 1. Ejecutar migraciones resilientes
     try:
