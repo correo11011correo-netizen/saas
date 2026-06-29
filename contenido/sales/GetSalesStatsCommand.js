@@ -7,7 +7,7 @@ export class GetSalesStatsCommand {
 
     // Calcular facturación total
     const totalFacturado = ventas.reduce((acc, v) => acc + v.total, 0);
-    
+
     // Ganancia estimada (30%)
     const gananciaEstimada = totalFacturado * 0.3;
 

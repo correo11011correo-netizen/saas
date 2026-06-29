@@ -26,7 +26,9 @@ class SaaSAdminCommandHandler:
         try:
             tenants = (
                 session.execute(
-                    text("SELECT id, name, plan, status, created_at FROM tenants ORDER BY created_at DESC")
+                    text(
+                        "SELECT id, name, plan, status, created_at FROM tenants ORDER BY created_at DESC"
+                    )
                 )
                 .mappings()
                 .all()
@@ -163,9 +165,7 @@ class SaaSAdminCommandHandler:
                 {"mid": module_id, "name": name, "plan": base_plan, "custom": is_custom},
             )
             session.commit()
-            return ServiceResponse.success_res(
-                message=f"Module {name} registered successfully."
-            )
+            return ServiceResponse.success_res(message=f"Module {name} registered successfully.")
         except Exception as e:
             session.rollback()
             return ServiceResponse.error_res(str(e), "MODULE_CREATE_ERROR")
@@ -211,9 +211,7 @@ class SaaSAdminCommandHandler:
                 {"tid": uuid.UUID(tenant_id), "mid": module_id},
             )
             session.commit()
-            return ServiceResponse.success_res(
-                message=f"Module {module_id} revoked from tenant."
-            )
+            return ServiceResponse.success_res(message=f"Module {module_id} revoked from tenant.")
         except Exception as e:
             session.rollback()
             return ServiceResponse.error_res(str(e), "MODULE_REVOKE_ERROR")

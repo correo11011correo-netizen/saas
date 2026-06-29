@@ -2,31 +2,31 @@
  * CommandDispatcher implementa el Dispatcher Pattern para desacoplar la UI de la lógica de negocio.
  * Permite ejecutar acciones mediante un identificador de comando y parámetros.
  */
-import { 
-  LoadStockCommand, 
-  DeleteStockCommand, 
+import {
+  LoadStockCommand,
+  DeleteStockCommand,
   GetStockCommand,
   GenerateCodeCommand
 } from './stock';
-import { 
-  AddToCartCommand, 
+import {
+  AddToCartCommand,
   ProcessSaleCommand,
   GetVentasCommand,
   GetSalesStatsCommand
 } from './sales';
-import { 
-  OpenCashCommand, 
-  CloseCashCommand, 
-  GetCashStateCommand 
+import {
+  OpenCashCommand,
+  CloseCashCommand,
+  GetCashStateCommand
 } from './caja/CashCommands';
-import { 
-  SetUserCommand, 
-  GetUserCommand 
+import {
+  SetUserCommand,
+  GetUserCommand
 } from './user/UserCommands';
-import { 
-  SaveAliasesCommand, 
-  GetAliasesCommand, 
-  DeleteAliasCommand 
+import {
+  SaveAliasesCommand,
+  GetAliasesCommand,
+  DeleteAliasCommand
 } from './aliases/AliasCommands';
 
 const COMMANDS = {
@@ -51,20 +51,20 @@ const COMMANDS = {
 export const CommandDispatcher = {
   async execute(commandName, params = {}) {
     const CommandClass = COMMANDS[commandName];
-    
+
     if (!CommandClass) {
       throw new Error(`Comando no encontrado: ${commandName}`);
     }
 
     console.log(`[CommandDispatcher] Ejecutando: ${commandName}`, params);
-    
+
     try {
       const command = new CommandClass(params);
       const result = await command.execute();
-      
+
       // Aquí se podría integrar el sistema de auditoría solicitado en las preferencias globales
       await this.logAudit(commandName, params, 'SUCCESS');
-      
+
       return result;
     } catch (error) {
       await this.logAudit(commandName, params, 'FAILURE', error.message);

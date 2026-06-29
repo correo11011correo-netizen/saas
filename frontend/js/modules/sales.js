@@ -60,7 +60,7 @@ window.Sales = {
 
     filterProducts(query) {
         const q = query.toLowerCase();
-        const filtered = this.allProducts.filter(p => 
+        const filtered = this.allProducts.filter(p =>
             p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)
         );
         this.renderProductList(filtered);

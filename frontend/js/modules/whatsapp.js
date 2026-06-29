@@ -114,10 +114,10 @@ window.Whatsapp = {
     async openChat(phoneNumber) {
         this.stopPolling();
         this.currentChat = phoneNumber;
-        
+
         // IMPORTANTE: Actualizar el estado global antes de refrescar los mensajes
         App.state.activePanel = phoneNumber;
-        
+
         UI.showLoading();
         try {
             // Obtenemos el alias del chat al refrescar
@@ -146,17 +146,17 @@ window.Whatsapp = {
             // --- CORRECCIÓN: Obtenemos el alias del backend si está disponible ---
             // Si el backend no envía el alias, intentamos deducirlo o usar un fallback seguro
             this.currentChatAlias = res.data.account_alias || 'bot'; // 'bot' es el alias que encontramos en la DB
-            
+
             const { messages = [], is_bot_active } = res.data || {};
             // ... (el resto del código original)
 
             if (!document.getElementById('messages-container')) {
-                const botSwitchHtml = (phoneNumber && phoneNumber !== 'unknown') 
+                const botSwitchHtml = (phoneNumber && phoneNumber !== 'unknown')
                     ? `
                     <label class="switch">
                         <input type="checkbox" id="bot-status-check" ${is_bot_active ? 'checked' : ''} onchange="Whatsapp.toggleBotStatus('${phoneNumber}', this.checked)">
                         <span class="slider"></span>
-                    </label>` 
+                    </label>`
                     : '';
 
                 UI.render('app-content', `
@@ -271,10 +271,10 @@ window.Whatsapp = {
 
         this.messageQueue.push(message);
         input.value = '';
-        
+
         // Forzamos el refresco visual inmediato para que el usuario vea su mensaje en "pendiente"
         await this.refreshChatMessages(phoneNumber);
-        
+
         // Iniciamos el procesamiento de la cola
         await this.processQueue();
     },
@@ -302,7 +302,7 @@ window.Whatsapp = {
 
                 // Éxito: eliminamos de la cola
                 this.messageQueue = this.messageQueue.filter(m => m.id !== msg.id);
-                
+
                 if (this.currentChat === msg.to) {
                     await this.refreshChatMessages(msg.to);
                 }
@@ -333,7 +333,7 @@ window.Whatsapp = {
             const res = await API.execute('bot.list', {});
             const bots = res.data || [];
             if (bots.length === 0) return '<p>No hay bots configurados. Crea uno en Gestionar Bots.</p>';
-            
+
             // Si no hay bot seleccionado, tomamos el primero
             if (!this.currentBotAlias) this.currentBotAlias = bots[0].account_alias;
 

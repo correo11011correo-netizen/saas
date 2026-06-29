@@ -38,7 +38,9 @@ class SDUIEngine:
             "layout": {"home": [{"component": "AdminTenantTable", "props": {}}]},
         }
 
-    def get_business_admin_manifest(self, session: Session, context: TenantContext) -> dict[str, Any]:
+    def get_business_admin_manifest(
+        self, session: Session, context: TenantContext
+    ) -> dict[str, Any]:
         # Aquí se mantiene la lógica original de layouts dinámicos por tenant
         return self._get_tenant_manifest(session, context)
 
@@ -61,7 +63,9 @@ class SDUIEngine:
         # 2. Layout
         home_layout = (
             session.execute(
-                text("SELECT layout_json FROM ui_layouts WHERE tenant_id = :tid AND screen_id = 'home'"),
+                text(
+                    "SELECT layout_json FROM ui_layouts WHERE tenant_id = :tid AND screen_id = 'home'"
+                ),
                 {"tid": context.tenant_id},
             )
             .mappings()
@@ -70,13 +74,14 @@ class SDUIEngine:
 
         return {
             "user": {"role": context.role, "plan": context.plan},
-            "theme": dict(theme) if theme else {"primary_color": "#000000", "secondary_color": "#FFFFFF", "dark_mode": False},
+            "theme": dict(theme)
+            if theme
+            else {"primary_color": "#000000", "secondary_color": "#FFFFFF", "dark_mode": False},
             "layout": {
                 "home": home_layout["layout_json"] if home_layout else [],
-                "dock": [{"id": "sales", "label": "Ventas", "icon": "cart"}], # Placeholder
+                "dock": [{"id": "sales", "label": "Ventas", "icon": "cart"}],  # Placeholder
             },
         }
-
 
 
 sdui_engine = SDUIEngine()

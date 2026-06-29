@@ -16,7 +16,9 @@ ALGORITHM = "HS256"
 
 
 class AuthService:
-    def register(self, session: Session, email: str, password: str, business_name: str, plan: str = "free") -> dict:
+    def register(
+        self, session: Session, email: str, password: str, business_name: str, plan: str = "free"
+    ) -> dict:
         try:
             # 1. Validar que el plan existe en el catálogo global
             plan_check = session.execute(
@@ -29,7 +31,7 @@ class AuthService:
 
             tenant_id = uuid.uuid4()
             webhook_secret = secrets.token_urlsafe(32)
-            
+
             session.execute(
                 text(
                     "INSERT INTO tenants (id, name, webhook_secret, plan) VALUES (:id, :name, :secret, :plan)"
@@ -94,7 +96,9 @@ class AuthService:
             session.rollback()
             return {"success": False, "error": str(e)}
 
-    def _apply_onboarding_blueprint(self, session: Session, tenant_id: uuid.UUID, business_name: str):
+    def _apply_onboarding_blueprint(
+        self, session: Session, tenant_id: uuid.UUID, business_name: str
+    ):
         """
         Aplica la configuración básica necesaria para que el tenant sea operativo
         desde el segundo uno (Credenciales, Bot Settings, Nodos Iniciales).
@@ -209,7 +213,9 @@ class AuthService:
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             return TenantContext(
-                tenant_id=uuid.UUID(payload["tenant_id"]) if payload["tenant_id"] != "SYSTEM" else None,
+                tenant_id=uuid.UUID(payload["tenant_id"])
+                if payload["tenant_id"] != "SYSTEM"
+                else None,
                 user_id=uuid.UUID(payload["user_id"]),
                 role=payload["role"],
                 plan=payload.get("plan", "free"),

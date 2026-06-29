@@ -43,7 +43,7 @@ window.BotManager = {
                     <div style="display: flex; flex-direction: column; gap: var(--spacing-sm); max-width: 500px;">
                         <label>Nombre del Bot</label>
                         <input type="text" id="new-bot-name" class="input-field" placeholder="Ej: Asistente de Ventas, Bot de Stock...">
-                        
+
                         <label style="margin-top: 10px; font-weight: bold;">Habilidades / Funciones:</label>
                         <div id="bot-functions-selector" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: white; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--color-border);">
                             ${Object.entries(this.FUNCTIONS).map(([key, label]) => `
@@ -145,7 +145,7 @@ window.BotManager = {
         try {
             const res = await API.execute('bot.list', {});
             const bots = res.data || [];
-            
+
             if (bots.length === 0) {
                 UI.render('bots-list', '<p class="text-muted">No hay motores de bot configurados.</p>');
                 return;
@@ -154,7 +154,7 @@ window.BotManager = {
             const html = bots.map(bot => {
                 const caps = bot.capabilities || {};
                 const activeFuncs = caps.functions || [];
-                
+
                 return `
                     <div class="bot-card">
                         <div class="bot-card-header">
@@ -170,7 +170,7 @@ window.BotManager = {
                                     <div class="capability-row">
                                         <span>${label}</span>
                                         <label class="switch">
-                                            <input type="checkbox" ${isActive ? 'checked' : ''} 
+                                            <input type="checkbox" ${isActive ? 'checked' : ''}
                                                    onchange="BotManager.toggleCapability('${bot.id}', '${key}', this.checked)">
                                             <span class="slider"></span>
                                         </label>
@@ -194,29 +194,29 @@ window.BotManager = {
             // Obtenemos el bot actual para preservar otras capacidades
             const res = await API.execute('bot.list', {});
             const bot = (res.data || []).find(b => b.id === botId);
-            
+
             if (!bot) throw new Error('Bot no encontrado');
 
             const caps = bot.capabilities || {};
             const functions = caps.functions || [];
-            
+
             if (value && !functions.includes(funcKey)) {
                 functions.push(funcKey);
             } else if (!value && functions.includes(funcKey)) {
                 functions = functions.filter(f => f !== funcKey);
             }
-            
+
             const updatedCaps = { ...caps, functions };
-            
-            await API.execute('bot.update_capabilities', { 
-                bot_profile_id: botId, 
-                capabilities: updatedCaps 
+
+            await API.execute('bot.update_capabilities', {
+                bot_profile_id: botId,
+                capabilities: updatedCaps
             });
 
             UI.toast(`Habilidad ${this.FUNCTIONS[funcKey] || funcKey} actualizada`, 'success');
         } catch (e) {
             UI.toast(`Error actualizando habilidad: ${e.message}`, 'error');
-            await this.loadBots(); 
+            await this.loadBots();
         } finally {
             UI.hideLoading();
         }
@@ -226,7 +226,7 @@ window.BotManager = {
         try {
             const credRes = await API.execute('whatsapp.list_credentials', {});
             const credentials = credRes.data || [];
-            
+
             const botRes = await API.execute('bot.list', {});
             const bots = botRes.data || [];
 
@@ -238,7 +238,7 @@ window.BotManager = {
             const html = credentials.map(cred => {
                 const meta = typeof cred.metadata === 'string' ? JSON.parse(cred.metadata) : cred.metadata;
                 const phoneId = meta.phone_number_id || 'S/N';
-                
+
                 return `
                     <div class="assignment-row">
                         <div class="assignment-info">
@@ -268,9 +268,9 @@ window.BotManager = {
     async assignBot(credentialId, botId) {
         try {
             UI.showLoading();
-            await API.execute('bot.assign', { 
-                credential_id: credentialId, 
-                bot_profile_id: botId 
+            await API.execute('bot.assign', {
+                credential_id: credentialId,
+                bot_profile_id: botId
             });
             UI.toast(`Bot asignado correctamente`, 'success');
         } catch (e) {
@@ -285,15 +285,15 @@ window.BotManager = {
             UI.showLoading();
             const res = await API.execute('whatsapp.list_credentials', {});
             const cred = (res.data || []).find(c => c.credential_id === credentialId);
-            
-            if (!cred) throw new Error('Credencial no encontrada');
-            
-            const meta = typeof cred.metadata === 'string' ? JSON.parse(cred.metadata) : cred.metadata;
-            const phone = meta.phone_number || 'unknown'; 
 
-            await API.execute('whatsapp.toggle_bot', { 
-                phone_number: phone, 
-                is_active: isActive 
+            if (!cred) throw new Error('Credencial no encontrada');
+
+            const meta = typeof cred.metadata === 'string' ? JSON.parse(cred.metadata) : cred.metadata;
+            const phone = meta.phone_number || 'unknown';
+
+            await API.execute('whatsapp.toggle_bot', {
+                phone_number: phone,
+                is_active: isActive
             });
             UI.toast(`Estado del bot actualizado`, 'success');
         } catch (e) {

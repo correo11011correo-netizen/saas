@@ -1,4 +1,3 @@
-import logging
 import os
 from contextlib import asynccontextmanager
 from typing import Any
@@ -7,10 +6,9 @@ import uvicorn
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-from core.auth import auth_service
 from core.auth import auth_service
 from core.billing import billing_commands
 from core.commands import core_commands
@@ -18,16 +16,17 @@ from core.context import TenantContext
 from core.credentials import credentials_commands
 from core.crm_commands import crm_commands
 from core.dispatcher import dispatcher
+from core.logger import setup_logging
 from core.module_entitlements import module_entitlement_service
-from core.sdui import sdui_engine
 from core.saas_admin import saas_admin_commands
-from core.webhooks import router as webhook_router, set_db_session_factory
+from core.sdui import sdui_engine
+from core.webhooks import router as webhook_router
+from core.webhooks import set_db_session_factory
 from employees.commands import employee_commands
 from sales.commands import sales_commands
 from stock.commands import stock_commands
 from stock.sync import stock_sync_commands
 from whatsapp.commands import bot_manager_commands, whatsapp_commands
-from core.logger import setup_logging
 
 # Configure global logging
 logger = setup_logging()
@@ -49,7 +48,7 @@ async def lifespan(app: FastAPI):
         logger.info("🚀 Sincronizando estructura de base de datos...")
         init_db()
         logger.info("✅ Base de datos lista y sincronizada.")
-    except Exception as e:
+    except Exception:
         logger.exception("❌ Error crítico inicializando la base de datos")
 
     # 2. Register all command handlers
@@ -162,15 +161,23 @@ def boot_app(context: TenantContext = Depends(get_current_context), db=Depends(g
 
 
 @app.get("/auth/onboarding-status")
-def get_onboarding_status(context: TenantContext = Depends(get_current_context), db=Depends(get_db)):
+def get_onboarding_status(
+    context: TenantContext = Depends(get_current_context), db=Depends(get_db)
+):
     """
     Indica al usuario qué pasos le faltan para completar la configuración inicial.
     """
     # 1. Verificar credenciales de WhatsApp
-    creds = db.execute(
-        text("SELECT api_key FROM credentials WHERE tenant_id = :tid AND service_name = 'whatsapp'"),
-        {"tid": context.tenant_id},
-    ).mappings().first()
+    creds = (
+        db.execute(
+            text(
+                "SELECT api_key FROM credentials WHERE tenant_id = :tid AND service_name = 'whatsapp'"
+            ),
+            {"tid": context.tenant_id},
+        )
+        .mappings()
+        .first()
+    )
     whatsapp_configured = bool(creds and creds["api_key"])
 
     # 2. Verificar si hay productos cargados
@@ -186,12 +193,13 @@ def get_onboarding_status(context: TenantContext = Depends(get_current_context),
             "whatsapp_configured": whatsapp_configured,
             "stock_loaded": stock_loaded,
         },
-        "next_step": "Configure WhatsApp" if not whatsapp_configured else ("Load Stock" if not stock_loaded else "Ready")
+        "next_step": "Configure WhatsApp"
+        if not whatsapp_configured
+        else ("Load Stock" if not stock_loaded else "Ready"),
     }
 
 
 @app.post("/auth/register")
-
 def register(data: dict[str, Any], response: Response, db=Depends(get_db)):
     # Data: {email, password, business_name, plan}
     res = auth_service.register(

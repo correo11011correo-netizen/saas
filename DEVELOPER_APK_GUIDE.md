@@ -12,7 +12,7 @@ Bienvenido al desarrollo de la APK de OmniCore. Esta aplicación no es una vista
 ### B. El Manifiesto de Arranque (`/api/boot`)
 Este JSON es la "Biblia" de la app. Debes leerlo para construir la interfaz:
 - **`theme`**: Aplica los colores primarios y secundarios a todo el app.
-- **`layout`**: Contiene la estructura de la Home. Es una lista de componentes. 
+- **`layout`**: Contiene la estructura de la Home. Es una lista de componentes.
   - *Ejemplo:* `[{ "id": "BtnPrimary", "props": { "label": "Cobrar", "action": "sales.create" } }]`.
 - **`permissions`**: Lista de comandos que el usuario puede ejecutar. Si un comando no está aquí, el botón debe estar deshabilitado.
 

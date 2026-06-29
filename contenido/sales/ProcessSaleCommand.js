@@ -18,7 +18,7 @@ export class ProcessSaleCommand {
         newInv[idx].cantidad -= item.cantidad;
       }
     });
-    
+
     await saveInventario(newInv);
     return { success: true, updatedInventory: newInv };
   }

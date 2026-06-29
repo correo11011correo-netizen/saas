@@ -1,11 +1,11 @@
 import json
-import logging
 import uuid
 from collections.abc import Callable
 from typing import Any
 
-from .context import TenantContext
 from core.logger import logger as system_logger
+
+from .context import TenantContext
 
 logger = system_logger.getChild("Dispatcher")
 
@@ -35,11 +35,9 @@ class CommandDispatcher:
     def execute(self, command_name: str, params: dict[str, Any], context: TenantContext) -> Any:
         # Añadimos contexto al log para esta ejecución
         extra = {"tenant_id": str(context.tenant_id), "user_id": str(context.user_id)}
-        
+
         if command_name not in self.registry:
-            logger.warning(
-                f"Command {command_name} not found in registry.", extra=extra
-            )
+            logger.warning(f"Command {command_name} not found in registry.", extra=extra)
             return {
                 "success": False,
                 "error": f"Command {command_name} not found",
@@ -57,7 +55,7 @@ class CommandDispatcher:
                     "error": "This command requires a PRO plan.",
                     "code": "PLAN_REQUIRED",
                 }
-        
+
         with self.db_session_factory() as session:
             try:
                 # Inject context and session as first arguments

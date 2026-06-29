@@ -9,7 +9,7 @@ export class LoadStockCommand {
     const inventario = await getInventario();
     let newInv = [...inventario];
     const idx = newInv.findIndex(i => i.codigo === this.item.codigo);
-    
+
     if (idx > -1) {
       newInv[idx] = this.item;
     } else {
