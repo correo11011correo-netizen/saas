@@ -8,7 +8,6 @@ window.onload = () => {
     const isAuthenticated = Session.isAuthenticated();
 
     // Guardia de Seguridad:
-    // Si intenta acceder a /app (o cualquier ruta protegida) sin sesión -> Welcome
     if ((path === '/app' || path !== '/') && !isAuthenticated) {
         console.log('Acceso denegado. Redirigiendo a Welcome...');
         Welcome.init();
@@ -17,9 +16,10 @@ window.onload = () => {
 
     // Flujo Normal
     Session.checkAuth(
-        (user) => {
+        async (user) => {
             console.log('Autenticado como:', user.email);
-            App.init();
+            // Importante: App.init ahora es async y maneja el manifiesto y el SyncManager
+            await App.init();
         },
         () => {
             console.log('No autenticado. Cargando pantalla de bienvenida...');

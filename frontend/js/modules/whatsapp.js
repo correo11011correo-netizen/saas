@@ -8,43 +8,25 @@ window.Whatsapp = {
     pollingInterval: null,
     listPollingInterval: null,
     currentChat: null,
-    messageQueue: [], // Queue for pending messages
-    config: {
-        dock: [
-            { id: 'messages', icon: 'whatsapp', label: 'Mensajes' },
-            { id: 'bot_studio', icon: 'settings', label: 'Bot Studio' },
-            { id: 'bot_manager', icon: 'settings', label: 'Gestionar Bots' }, { id: 'api_keys', icon: 'key', label: 'API Keys' }
-        ]
+    messageQueue: [],
+    currentBotAlias: null,
+
+    async setup() {
+        console.log('[Whatsapp] Initializing component state...');
+        // El setup se usa para inicializaciones que no dependen del renderizado inmediato
     },
 
-    formatTime(dateString) {
-        if (!dateString) return '';
-        const date = new Date(dateString);
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    },
-
-    getStatusIcon(status, senderType) {
-        // Messages sent by the app user (agent) are marked as 'bot' in the DB
-        if (!status) return ''; // Manejar ausencia de status
-        if (senderType === 'bot') {
-            switch (status) {
-                case 'sent': return '<span style="font-size: 12px; margin-left: 4px; opacity: 0.6;">✓</span>';
-                case 'delivered': return '<span style="font-size: 12px; margin-left: 4px; opacity: 0.6;">✓✓</span>';
-                case 'read': return '<span style="font-size: 12px; margin-left: 4px; color: var(--color-primary);">✓✓</span>';
-                default: return '<span style="font-size: 12px; margin-left: 4px; opacity: 0.5;">🕒</span>';
-            }
-        }
-        return '';
-    },
-
-    async render(panelId) {
+    async render(panelId, props = {}) {
         this.stopPolling();
         let content = '';
+
         if (panelId === 'bot_studio') {
             content = await this.renderBotStudio();
         } else if (panelId === 'messages') {
             content = await this.renderMessages();
-        } else if (panelId === 'bot_manager') { content = await this.renderBotManager(); } else if (panelId === 'api_keys') {
+        } else if (panelId === 'bot_manager') {
+            content = await this.renderBotManager();
+        } else if (panelId === 'api_keys') {
             content = `<div style="padding: var(--spacing-md);"><p>Gestión de API Keys (Ver Perfil)</p></div>`;
         } else {
             content = `<p>Panel ${panelId} en desarrollo...</p>`;
@@ -56,6 +38,7 @@ window.Whatsapp = {
             </div>
         `);
 
+        // Reiniciar procesos según el panel activo
         if (panelId === 'bot_studio') {
             await this.loadNodes();
             await this.loadSettings();
@@ -65,6 +48,18 @@ window.Whatsapp = {
             await this.loadBots();
             this.startListPolling();
         }
+    },
+
+    destroy() {
+        console.log('[Whatsapp] Destroying component and cleaning resources...');
+        this.stopPolling();
+        this.currentChat = null;
+    },
+
+    formatTime(dateString) {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     },
 
     async renderMessages() {

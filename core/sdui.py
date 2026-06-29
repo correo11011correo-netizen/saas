@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Any
 
@@ -12,104 +13,85 @@ logger = logging.getLogger("OmniCore.SDUI")
 class SDUIEngine:
     """
     Motor de Interfaz Dirigida por Servidor (Server-Driven UI).
-    Orquestador que define qué componentes nativos debe renderizar la APK.
+    Orquestador que resuelve dinámicamente los paneles basándose en la base de datos.
+    Sigue la jerarquía: Paneles Globales -> Paneles de Rol -> Paneles de Tenant.
     """
 
     def get_boot_manifest(self, session: Session, context: TenantContext) -> dict[str, Any]:
         """
-        Genera el contrato de arranque, delegando según el rol.
+        Genera el contrato de arranque resolviendo la configuración dinámica de la DB.
         """
-        if context.role == "superadmin":
-            return self.get_superadmin_manifest(session, context)
-        elif context.role == "support":
-            return self.get_support_manifest(session, context)
-        elif context.role == "admin":
-            return self.get_business_admin_manifest(session, context)
-        else:
-            return self.get_employee_manifest(session, context)
+        # 1. Resolver los paneles activos para este usuario/tenant
+        panels = self._resolve_panels(session, context)
 
-    def get_superadmin_manifest(self, session: Session, context: TenantContext) -> dict[str, Any]:
-        return {
-            "user": {"role": "superadmin", "plan": "enterprise"},
-            "theme": {"primary_color": "#1A237E", "secondary_color": "#E8EAF6", "dark_mode": True},
-            "dock": [
-                {"id": "tenants", "label": "Negocios", "icon": "business"},
-                {"id": "health", "label": "Salud Sistema", "icon": "monitor_heart"},
-                {"id": "stats", "label": "Métricas SaaS", "icon": "analytics"},
-                {"id": "billing", "label": "Facturación", "icon": "payments"},
-            ],
-            "layout": {
-                "home": [
-                    {
-                        "component": "GlobalHealthCard",
-                        "props": {"cmd": "saas.monitor.global_health"},
-                    },
-                    {
-                        "component": "TenantStatsChart",
-                        "props": {"cmd": "saas.monitor.tenant_stats"},
-                    },
-                    {"component": "TenantAdminTable", "props": {"cmd": "saas.tenants.list"}},
-                ],
-            },
-        }
-
-    def get_support_manifest(self, session: Session, context: TenantContext) -> dict[str, Any]:
-        return {
-            "user": {"role": "support", "plan": "system"},
-            "theme": {"primary_color": "#006064", "secondary_color": "#B2EBF2", "dark_mode": False},
-            "dock": [
-                {"id": "client_search", "label": "Buscar Cliente", "icon": "search"},
-                {"id": "bot_diagnostics", "label": "Diagnóstico Bot", "icon": "bug_report"},
-                {"id": "user_mgmt", "label": "Gestión Usuarios", "icon": "people"},
-            ],
-            "layout": {
-                "home": [
-                    {
-                        "component": "SupportSearchBox",
-                        "props": {"placeholder": "Ingrese ID de Tenant..."},
-                    },
-                    {
-                        "component": "SupportBotStatusCard",
-                        "props": {"cmd": "support.bot.status_check"},
-                    },
-                    {
-                        "component": "SupportImpersonationPanel",
-                        "props": {"cmd": "support.user.impersonate"},
-                    },
-                ],
-            },
-        }
-
-    def get_business_admin_manifest(
-        self, session: Session, context: TenantContext
-    ) -> dict[str, Any]:
-        # Mantenemos el layout dinámico pero añadimos el Dock de Dueño
-        manifest = self._get_tenant_manifest(session, context)
-        manifest["dock"] = [
-            {"id": "sales", "label": "Ventas", "icon": "shopping_cart"},
-            {"id": "stock", "label": "Stock", "icon": "inventory_2"},
-            {"id": "monitoring", "label": "Monitoreo", "icon": "insights"},
-            {"id": "staff", "label": "Personal", "icon": "group"},
+        # 2. Construir el dock basándose en los paneles encontrados
+        dock = [
+            {
+                "id": p["panel_id"],
+                "label": p["name"],
+                "icon": p["config_json"].get("icon", "default_icon"),
+            }
+            for p in panels
         ]
-        # Añadimos la herramienta de stock crítico al home del dueño
-        if "home" in manifest["layout"]:
-            manifest["layout"]["home"].append(
-                {
-                    "component": "CriticalStockAlert",
-                    "props": {"cmd": "business.monitor.critical_stock"},
-                }
+
+        # Crear un ID de versión basado en el contenido de los paneles
+        import hashlib
+
+        version_content = json.dumps([p["panel_id"] for p in panels], sort_keys=True)
+        version_id = hashlib.sha256(version_content.encode()).hexdigest()[:12]
+
+        # 3. Resolver el layout general
+        manifest = {
+            "user": {"role": context.role, "plan": context.plan},
+            "theme": self._resolve_theme(session, context),
+            "dock": dock,
+            "layout": {
+                "home": self._resolve_home_layout(session, context),
+            },
+            "version": version_id,
+        }
+
+        return manifest
+
+    def _resolve_panels(self, session: Session, context: TenantContext) -> list[dict]:
+        """
+        Resuelve los paneles aplicando la jerarquía de prioridades.
+        Criterios de selección:
+        - Paneles globales activos.
+        - Paneles específicos para el rol del usuario.
+        - Paneles personalizados para el tenant del usuario (estos sobrescriben globales/rol).
+        """
+        # Query optimizada para traer todo lo que el usuario puede ver
+        query = text("""
+            SELECT panel_id, name, config_json
+            FROM panel_definitions
+            WHERE is_active = true
+            AND (
+                (required_role IS NULL AND tenant_id IS NULL) OR
+                (required_role = :role AND tenant_id IS NULL) OR
+                (tenant_id = :tid)
             )
-        return manifest
+            ORDER BY
+                CASE WHEN tenant_id IS NOT NULL THEN 1 ELSE 2 END,
+                priority ASC
+        """)
 
-    def get_employee_manifest(self, session: Session, context: TenantContext) -> dict[str, Any]:
-        manifest = self._get_tenant_manifest(session, context)
-        manifest["dock"] = [
-            {"id": "sales", "label": "Ventas", "icon": "shopping_cart"},
-            {"id": "stock", "label": "Stock", "icon": "inventory_2"},
-        ]
-        return manifest
+        result = (
+            session.execute(query, {"role": context.role, "tid": context.tenant_id})
+            .mappings()
+            .all()
+        )
 
-    def _get_tenant_manifest(self, session: Session, context: TenantContext) -> dict[str, Any]:
+        # Para evitar duplicados (si un panel global es sobrescrito por uno de tenant),
+        # usamos un diccionario basado en panel_id.
+        unique_panels = {}
+        for row in result:
+            unique_panels[row["panel_id"]] = row
+
+        return list(unique_panels.values())
+
+    def _resolve_theme(self, session: Session, context: TenantContext) -> dict:
+        """Resuelve el tema visual del tenant o el default del sistema."""
         theme = (
             session.execute(
                 text("SELECT * FROM ui_themes WHERE tenant_id = :tid"), {"tid": context.tenant_id}
@@ -117,7 +99,14 @@ class SDUIEngine:
             .mappings()
             .first()
         )
+        return (
+            dict(theme)
+            if theme
+            else {"primary_color": "#000000", "secondary_color": "#FFFFFF", "dark_mode": False}
+        )
 
+    def _resolve_home_layout(self, session: Session, context: TenantContext) -> list:
+        """Resuelve el layout de la pantalla de inicio."""
         home_layout = (
             session.execute(
                 text(
@@ -128,17 +117,7 @@ class SDUIEngine:
             .mappings()
             .first()
         )
-
-        return {
-            "user": {"role": context.role, "plan": context.plan},
-            "theme": dict(theme)
-            if theme
-            else {"primary_color": "#000000", "secondary_color": "#FFFFFF", "dark_mode": False},
-            "layout": {
-                "home": home_layout["layout_json"] if home_layout else [],
-                "dock": [],
-            },
-        }
+        return home_layout["layout_json"] if home_layout else []
 
 
 sdui_engine = SDUIEngine()

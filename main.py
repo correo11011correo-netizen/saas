@@ -3,24 +3,39 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import uvicorn
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
+from core.advanced_ui_commands import advanced_ui_commands
 from core.auth import auth_service
 from core.billing import billing_commands
 from core.commands import core_commands
 from core.context import TenantContext
 from core.credentials import credentials_commands
 from core.crm_commands import crm_commands
+from core.dev_admin_commands import dev_admin_commands
 from core.dispatcher import dispatcher
 from core.logger import setup_logging
 from core.migrator import run_resilient_migrations
 from core.module_entitlements import module_entitlement_service
+from core.panel_commands import panel_commands
+from core.realtime import realtime_manager
 from core.saas_admin import saas_admin_commands
 from core.sdui import sdui_engine
+from core.url_gateway import url_gateway
 from core.webhooks import router as webhook_router
 from core.webhooks import set_db_session_factory
 from db_engine.bootstrap import bootstrap
@@ -83,6 +98,9 @@ async def lifespan(app: FastAPI):
         dispatcher.register_handler(saas_admin_commands)
         dispatcher.register_handler(billing_commands)
         dispatcher.register_handler(crm_commands)
+        dispatcher.register_handler(panel_commands)
+        dispatcher.register_handler(advanced_ui_commands)
+        dispatcher.register_handler(dev_admin_commands)
         logger.info("✅ Todos los comandos han sido registrados.")
     except Exception as e:
         logger.critical(f"❌ Error registrando comandos: {e}", exc_info=True)
@@ -184,6 +202,16 @@ async def test_error():
 # Register Webhook Router
 app.include_router(webhook_router)
 
+
+@app.get("/api/cmd/{token}")
+def execute_url_command(token: str, db=Depends(get_db)):
+    """
+    Gateway for executing commands via signed URLs.
+    No auth token required as the signature is the proof of authority.
+    """
+    return url_gateway.validate_and_execute(token, db)
+
+
 # Servir archivos estáticos del frontend
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
@@ -199,6 +227,42 @@ def health_check(db=Depends(get_db)):
         logger.error(f"Health check failed: {e}")
         raise HTTPException(status_code=503, detail="Database Down")
     return {"status": "ok"}
+
+
+# --- REALTIME GATEWAY ---
+
+
+@app.websocket("/ws/realtime")
+async def websocket_endpoint(websocket: WebSocket, token: str = None):
+    """
+    Real-time gateway for chats, bot events and UI updates.
+    """
+    if not token:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    try:
+        # Validate token using the same logic as REST API
+        from core.auth import auth_service
+
+        context = auth_service.decode_token(token)
+        if not context:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+        await realtime_manager.connect(websocket, str(context.tenant_id), str(context.user_id))
+
+        try:
+            while True:
+                # Keep connection alive and listen for client-side events if needed
+                await websocket.receive_text()
+                # Handle incoming WS messages here (e.g. typing indicators)
+        except WebSocketDisconnect:
+            realtime_manager.disconnect(str(context.tenant_id), str(context.user_id))
+
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        await websocket.close()
 
 
 # --- SDUI ENDPOINT ---

@@ -7,29 +7,63 @@ const App = {
     state: {
         activeModule: 'hub',
         activePanel: 'hub',
-        moduleConfig: {
-            hub: {
-                dock: [
-                    { id: 'stock', icon: 'box', label: 'Stock' },
-                    { id: 'sales', icon: 'sales', label: 'Ventas' },
-                    { id: 'whatsapp', icon: 'whatsapp', label: 'WhatsApp' }
-                ],
-                panels: [
-                    { id: 'profile', icon: 'user', label: 'Perfil' }
-                ]
+        manifest: null // Stores the dynamic config from /api/boot
+    },
+
+    async init() {
+        await this.syncManifest();
+        this.renderHub();
+        this.bindEvents();
+
+        // Auto-sync offline queue on startup
+        window.addEventListener('online', () => SyncManager.processQueue());
+        SyncManager.processQueue();
+
+        // Hot Update: Verificar cambios en el manifiesto cada 60 segundos
+        setInterval(() => this.checkHotUpdate(), 60000);
+    },
+
+    async checkHotUpdate() {
+        try {
+            const newManifest = await API.execute('core.get_boot_manifest'); // O endpoint /api/boot
+            if (newManifest && newManifest.version !== this.state.manifest?.version) {
+                console.log('Nueva configuración de UI detectada. Actualizando...');
+                this.state.manifest = newManifest;
+                this.renderHub();
+                this.renderDock();
+                UI.toast('Interfaz actualizada dinámicamente', 'success');
             }
+        } catch (e) {
+            console.error('Hot update check failed:', e);
         }
     },
 
-    init() {
-        this.renderHub();
-        this.bindEvents();
+    async syncManifest() {
+        try {
+            // Boot manifest is called via the app's boot flow, but we ensure it's here
+            const bootData = await API.execute('core.get_boot_manifest'); // Assuming this command is mapped or using /api/boot
+            this.state.manifest = bootData;
+        } catch (e) {
+            console.error('Failed to sync manifest:', e);
+            // Fallback to a minimal manifest to avoid crash
+            this.state.manifest = { dock: [], layout: { home: [] } };
+        }
     },
 
     renderHub() {
         this.state.activeModule = 'hub';
         this.state.activePanel = 'hub';
         UI.toast('Cargando Hub Central...', 'info');
+
+        const manifest = this.state.manifest || { dock: [], layout: { home: [] } };
+
+        // Generar la grilla de módulos dinámicamente desde el dock del manifiesto
+        const modulesHtml = manifest.dock.map(module => `
+            <div class="module-card" onclick="App.loadModule('${module.id}')">
+                <div class="module-card-icon">${Icons[module.icon] || Icons.default}</div>
+                <div class="module-card-label">${module.label}</div>
+            </div>
+        `).join('');
 
         const html = `
             <div class="app-container">
@@ -43,26 +77,7 @@ const App = {
 
                 <main id="app-content" class="app-main">
                     <div class="modules-grid">
-                        <div class="module-card" onclick="App.loadModule('sales')">
-                            <div class="module-card-icon">${Icons.sales}</div>
-                            <div class="module-card-label">Ventas</div>
-                        </div>
-                        <div class="module-card" onclick="App.loadModule('stock')">
-                            <div class="module-card-icon">${Icons.box}</div>
-                            <div class="module-card-label">Stock</div>
-                        </div>
-                        <div class="module-card" onclick="App.loadModule('whatsapp')">
-                            <div class="module-card-icon">${Icons.whatsapp}</div>
-                            <div class="module-card-label">WhatsApp</div>
-                        </div>
-                        <div class="module-card" onclick="App.loadModule('botManager')">
-                            <div class="module-card-icon">${Icons.settings}</div>
-                            <div class="module-card-label">Gestión de Bots</div>
-                        </div>
-                        <div class="module-card" onclick="App.loadModule('profile')">
-                            <div class="module-card-icon">${Icons.user}</div>
-                            <div class="module-card-label">Perfil</div>
-                        </div>
+                        ${modulesHtml}
                     </div>
                 </main>
 
@@ -91,23 +106,23 @@ const App = {
     },
 
     renderDock() {
-        const activeModule = this.state.activeModule;
-        const config = this.state.moduleConfig[activeModule] || this.state.moduleConfig['hub'];
-        const dynamicIcons = config.dock || [];
+        const manifest = this.state.manifest || { dock: [] };
+        const dockItems = manifest.dock || [];
 
         let dockHtml = `
             <div onclick="App.renderHub()" style="cursor: pointer; color: ${this.state.activePanel === 'hub' ? 'var(--color-primary)' : 'var(--color-text-muted)'}; font-size: 24px; transition: all 0.2s;">${Icons.home}</div>
         `;
 
-        for (let i = 0; i < 3; i++) {
-            const item = dynamicIcons[i];
-            if (item) {
-                dockHtml += `
-                    <div onclick="App.loadModule('${activeModule}', '${item.id}')" style="cursor: pointer; color: ${this.state.activePanel === item.id ? 'var(--color-primary)' : 'var(--color-text-muted}'}; font-size: 24px; transition: all 0.2s;">${Icons[item.icon]}</div>
-                `;
-            } else {
-                dockHtml += `<div style="width: 24px;"></div>`;
-            }
+        // Renderizar hasta 3 elementos del dock dinámico
+        dockItems.slice(0, 3).forEach(item => {
+            dockHtml += `
+                <div onclick="App.loadModule('${item.id}')" style="cursor: pointer; color: ${this.state.activePanel === item.id ? 'var(--color-primary)' : 'var(--color-text-muted)'}; font-size: 24px; transition: all 0.2s;">${Icons[item.icon] || Icons.default}</div>
+            `;
+        });
+
+        // Si hay menos de 3, rellenar con espacios
+        for (let i = dockItems.length; i < 3; i++) {
+            dockHtml += `<div style="width: 24px;"></div>`;
         }
 
         dockHtml += `
@@ -143,26 +158,42 @@ const App = {
         }
     },
 async loadModule(moduleName, panelId = null) {
+    if (this.state.activeModule === moduleName && this.state.activePanel === panelId) return;
+
+    // 1. Limpieza del módulo anterior (Ciclo de Vida: Destroy)
+    if (this.state.activeModule && window[this.state.activeModule.charAt(0).toUpperCase() + this.state.activeModule.slice(1)]) {
+        const prevModule = window[this.state.activeModule.charAt(0).toUpperCase() + this.state.activeModule.slice(1)];
+        if (typeof prevModule.destroy === 'function') {
+            prevModule.destroy();
+        }
+    }
+
     UI.showLoading();
     UI.toast(`Cargando ${moduleName}...`, 'info');
 
     try {
+        // 2. Carga del Script
         await this.loadScript(`/js/modules/${moduleName}.js`);
         const module = window[moduleName.charAt(0).toUpperCase() + moduleName.slice(1)];
 
-        if (module && typeof module.render === 'function') {
-            if (module.config) {
-                this.state.moduleConfig[moduleName] = module.config;
-            }
+        if (!module) throw new Error(`Módulo ${moduleName} no encontrado.`);
 
-            const targetPanel = panelId || module.defaultPanel || 'inventory';
-            module.render(targetPanel);
+        // 3. Inicialización (Ciclo de Vida: Setup)
+        if (typeof module.setup === 'function') {
+            await module.setup();
+        }
 
-            this.state.activeModule = moduleName; // CORRECTO: el módulo es 'stock'
-            this.state.activePanel = targetPanel; // CORRECTO: el panel es 'pos'
+        // 4. Renderizado con Props del Manifiesto (Ciclo de Vida: Render)
+        const panelConfig = this.state.manifest?.dock.find(p => p.id === panelId) || {};
+        const targetPanel = panelId || module.defaultPanel || 'default';
+
+        if (typeof module.render === 'function') {
+            module.render(targetPanel, panelConfig);
+            this.state.activeModule = moduleName;
+            this.state.activePanel = targetPanel;
             this.renderDock();
         } else {
-            throw new Error(`El módulo ${moduleName} no implementa la función render().`);
+            throw new Error(`El módulo ${moduleName} no implementa render().`);
         }
     } catch (e) {
         UI.toast(`Error al cargar módulo: ${e.message}`, 'error');
@@ -170,6 +201,8 @@ async loadModule(moduleName, panelId = null) {
     } finally {
         UI.hideLoading();
     }
+},
+
 },
     async loadScript(src) {
         return new Promise((resolve, reject) => {

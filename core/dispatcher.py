@@ -79,6 +79,15 @@ class CommandDispatcher:
         return None
 
     def execute(self, command_name: str, params: dict[str, Any], context: TenantContext) -> Any:
+        import os
+        import time
+
+        from sqlalchemy import text
+
+        start_time = time.perf_counter()
+        result = None
+        error = None
+
         # Añadimos contexto al log para esta ejecución
         extra = {
             "tenant_id": str(context.tenant_id) if context.tenant_id else "SYSTEM",
@@ -101,41 +110,53 @@ class CommandDispatcher:
         if access_error:
             return access_error
 
-        with self.db_session_factory() as session:
-            try:
-                # Inject context and session as first arguments
-                # The commands are expected to be: func(session, context, **params)
-                result = func(session, context, **params)
-
-                # Commit the business transaction before auditing
-                session.commit()
-
-                # Automatic Audit Log (Independent transaction)
+        try:
+            with self.db_session_factory() as session:
                 try:
-                    self._audit(context, command_name, params)
-                except Exception as audit_err:
-                    logger.error(f"Audit failed for {command_name}: {audit_err}", extra=extra)
+                    # Execute
+                    result = func(session, context, **params)
 
-                return result
-            except Exception as e:
-                session.rollback()
-                logger.exception(f"Error executing {command_name}: {e}", extra=extra)
-                return {"success": False, "error": str(e), "code": "EXECUTION_ERROR"}
+                    # Commit the business transaction before auditing
+                    session.commit()
 
-                # Commit the business transaction before auditing
-                session.commit()
+                    # Automatic Audit Log (Independent transaction)
+                    try:
+                        self._audit(context, command_name, params)
+                    except Exception as audit_err:
+                        logger.error(f"Audit failed for {command_name}: {audit_err}", extra=extra)
 
-                # Automatic Audit Log (Independent transaction)
+                    return result
+                except Exception as e:
+                    session.rollback()
+                    error = str(e)
+                    logger.exception(f"Error executing {command_name}: {e}", extra=extra)
+                    return {"success": False, "error": str(e), "code": "EXECUTION_ERROR"}
+        finally:
+            # --- DEV LOGGING INTERCEPTOR ---
+            # Log execution if environment is dev or user is a developer
+            if os.getenv("ENVIRONMENT") == "dev" or context.role == "developer":
                 try:
-                    self._audit(context, command_name, params)
-                except Exception as audit_err:
-                    logger.error(f"Audit failed for {command_name}: {audit_err}", extra=extra)
-
-                return result
-            except Exception as e:
-                session.rollback()
-                logger.exception(f"Error executing {command_name}: {e}", extra=extra)
-                return {"success": False, "error": str(e), "code": "EXECUTION_ERROR"}
+                    execution_time = int((time.perf_counter() - start_time) * 1000)
+                    with self.db_session_factory() as log_session:
+                        log_session.execute(
+                            text("""
+                                INSERT INTO dev_logs (command, params, result, error, execution_time_ms, user_id, tenant_id, role)
+                                VALUES (:cmd, :params, :res, :err, :time, :uid, :tid, :role)
+                            """),
+                            {
+                                "cmd": command_name,
+                                "params": json.dumps(params, default=str),
+                                "res": json.dumps(result, default=str) if result else None,
+                                "err": error if "error" in locals() else None,
+                                "time": execution_time,
+                                "uid": context.user_id,
+                                "tid": context.tenant_id,
+                                "role": context.role,
+                            },
+                        )
+                        log_session.commit()
+                except Exception as log_err:
+                    logger.error(f"Dev logging failed: {log_err}")
 
     def _audit(self, context: TenantContext, command: str, params: dict):
         import time

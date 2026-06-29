@@ -3,9 +3,12 @@ import logging
 from sqlalchemy import text
 
 from db_engine.core.engine import nexus_db
+from db_engine.core.panel_seeder import seed_ui_panels
 from db_engine.core.permissions_data import PLAN_PERMISSIONS_MAP, SYSTEM_PERMISSIONS
 from db_engine.repositories.permission_repo import PermissionRepository
 from db_engine.sync.stock_migrator import OmniStockMigrator
+
+logging.basicConfig(level=logging.INFO)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("NexusDB-Bootstrap")
@@ -27,6 +30,9 @@ class NexusBootstrap:
 
         with self.db.session() as session:
             try:
+                # 0. Garantizar Esquema de Paneles (Auto-migración rápida)
+                self._ensure_panel_schema(session)
+
                 # 1. Verificar si la base de datos está vacía o es antigua
                 if self._is_db_empty(session):
                     logger.info("Empty database detected. Performing Fresh Start...")
@@ -38,10 +44,37 @@ class NexusBootstrap:
                 # 2. Sincronizar Permisos del Sistema (Siempre se hace para añadir nuevos en actualizaciones)
                 self._sync_permissions(session)
 
+                # 3. Sincronizar Paneles de UI (Asegura que la estructura de la interfaz sea consistente)
+                seed_ui_panels(session)
+
                 logger.info("✅ NexusDB Bootstrap completed successfully.")
             except Exception as e:
                 logger.exception(f"❌ Critical error during bootstrap: {e}")
                 raise e
+
+    def _ensure_panel_schema(self, session):
+        """
+        Auto-migración para la tabla de paneles.
+        Asegura que la tabla exista antes de que el seeder intente cargar datos.
+        """
+        logger.info("Checking UI panel schema...")
+        session.execute(
+            text("""
+                CREATE TABLE IF NOT EXISTS panel_definitions (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    panel_id VARCHAR(100) UNIQUE NOT NULL,
+                    name VARCHAR(100) NOT NULL,
+                    config_json JSONB NOT NULL,
+                    required_role VARCHAR(50),
+                    tenant_id UUID REFERENCES tenants(id),
+                    is_active BOOLEAN DEFAULT true,
+                    priority VARCHAR(10) DEFAULT '0',
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+        )
+        session.commit()
 
     def _is_db_empty(self, session) -> bool:
         """Verifica si la tabla de tenants existe y tiene datos."""

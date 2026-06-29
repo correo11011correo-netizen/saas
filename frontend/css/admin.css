@@ -1,0 +1,116 @@
+/* Estilos para el Administrador de Paneles */
+.admin-container {
+    padding: var(--spacing-lg);
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-lg);
+}
+
+.admin-filters {
+    margin-bottom: var(--spacing-md);
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+.admin-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.panel-item {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.panel-item:hover {
+    border-color: var(--color-primary);
+    background: var(--color-bg-accent);
+}
+
+.panel-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.panel-name {
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.panel-id {
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
+.role-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    text-transform: uppercase;
+    font-weight: bold;
+    width: fit-content;
+}
+
+.role-badge.global { background: #e0e0e0; color: #666; }
+.role-badge.admin { background: #d1c4e9; color: #512da8; }
+.role-badge.employee { background: #c8e6c9; color: #2e7d32; }
+.role-badge.support { background: #bbdefb; color: #1565c0; }
+.role-badge.superadmin { background: #ffccbc; color: #bf360c; }
+
+.panel-actions {
+    display: flex;
+    gap: var(--spacing-xs);
+}
+
+.admin-form {
+    background: var(--color-bg-secondary);
+    padding: var(--spacing-lg);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group label {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.form-input, .form-select {
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-primary);
+    color: var(--color-text);
+    font-size: 14px;
+}
+
+.form-actions {
+    margin-top: var(--spacing-md);
+    display: flex;
+    justify-content: flex-end;
+}
