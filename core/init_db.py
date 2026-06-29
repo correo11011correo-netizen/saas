@@ -429,13 +429,6 @@ def init_db():
                 ],
                 "system_settings": ["key VARCHAR(100)", "value TEXT"],
                 "user_permissions": ["user_id UUID", "permission_key VARCHAR(100)"],
-                "credentials": [
-                    "service_name VARCHAR(100)",
-                    "account_alias VARCHAR(100)",
-                    "api_key TEXT",
-                    "secret TEXT",
-                    "metadata JSONB",
-                ],
             }
 
             for table, columns in business_schemas.items():
