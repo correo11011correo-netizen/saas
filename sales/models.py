@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.dialects.postgresql import UUID
 
-from core.database import Base
+from db_engine.core.base_model import Base
 
 
 class Sale(Base):

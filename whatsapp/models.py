@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 
-from core.database import Base
+from db_engine.core.base_model import Base
 
 
 class BotProfile(Base):
