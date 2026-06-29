@@ -1,3 +1,4 @@
+import fcntl
 import logging
 
 from alembic import command
@@ -9,27 +10,32 @@ logger = logging.getLogger("OmniCore.Migrator")
 
 def run_resilient_migrations():
     """
-    Ejecuta las migraciones de Alembic de forma resiliente.
-    Si falla por revisiones faltantes, intenta corregir el historial automáticamente.
+    Ejecuta las migraciones de Alembic de forma resiliente con un bloqueo de archivo
+    para evitar ejecuciones concurrentes en entornos multi-worker.
     """
-    alembic_cfg = Config("alembic.ini")
+    lock_file = "/tmp/alembic.lock"
+    with open(lock_file, "w") as f:
+        try:
+            # Intentar obtener bloqueo exclusivo
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            logger.info("⏳ Otra instancia está ejecutando las migraciones. Esperando...")
+            fcntl.flock(f, fcntl.LOCK_EX)  # Bloquea hasta que la otra instancia termine
+            logger.info("✅ Otra instancia terminó. Continuando...")
+            return
 
-    try:
-        logger.info("🚀 Intentando ejecutar migraciones (upgrade head)...")
-        command.upgrade(alembic_cfg, "head")
-        logger.info("✅ Migraciones aplicadas con éxito.")
-    except CommandError as e:
-        # Si el error es por una revisión faltante, intentamos corregir el estado
-        if "Can't locate revision" in str(e):
-            logger.warning(
-                "⚠️ Historial de Alembic desincronizado. Intentando corregir (stamp head)..."
-            )
-            try:
+        alembic_cfg = Config("alembic.ini")
+        try:
+            logger.info("🚀 Ejecutando migraciones (upgrade head)...")
+            command.upgrade(alembic_cfg, "head")
+            logger.info("✅ Migraciones aplicadas con éxito.")
+        except CommandError as e:
+            if "Can't locate revision" in str(e):
+                logger.warning("⚠️ Historial de Alembic desincronizado. Corrigiendo (stamp head)...")
                 command.stamp(alembic_cfg, "head")
-                logger.info("✅ Historial de Alembic corregido (stamp head).")
-            except Exception as stamp_e:
-                logger.error(f"❌ Error crítico intentando corregir el historial: {stamp_e}")
-                raise stamp_e
-        else:
-            logger.error(f"❌ Error en migraciones: {e}")
-            raise e
+                logger.info("✅ Historial de Alembic corregido.")
+            else:
+                logger.error(f"❌ Error en migraciones: {e}")
+                raise e
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
