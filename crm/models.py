@@ -14,5 +14,5 @@ class Customer(Base):
     phone_number = Column(String(50), nullable=False)
     full_name = Column(String(255))
     email = Column(String(255))
-    metadata = Column(JSON, default={})
+    custom_data = Column("metadata", JSON, default={})
     created_at = Column(DateTime(timezone=True), server_default=func.now())

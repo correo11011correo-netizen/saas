@@ -15,7 +15,7 @@ class Credential(Base):
     account_alias = Column(String(100))
     api_key = Column(String, nullable=True)
     secret = Column(String, nullable=True)
-    metadata = Column(JSON)
+    custom_data = Column("metadata", JSON)
 
 
 class BotAssignment(Base):
