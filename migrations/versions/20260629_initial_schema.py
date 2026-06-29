@@ -11,7 +11,7 @@ depends_on = None
 
 
 def upgrade():
-    # Ejecutamos el SQL probado que funcionaba en init_db
+    # Ejecutamos el SQL completo para todas las tablas necesarias
     op.execute(
         sa.text("""
         CREATE TABLE IF NOT EXISTS tenants (
@@ -39,17 +39,60 @@ def upgrade():
             ventas_digital DECIMAL(12,2) DEFAULT 0,
             hora_apertura TIMESTAMP WITH TIME ZONE
         );
-        CREATE TABLE IF NOT EXISTS products (
+        CREATE TABLE IF NOT EXISTS bot_profiles (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             tenant_id UUID REFERENCES tenants(id),
-            code VARCHAR(100) NOT NULL,
-            name VARCHAR(255) NOT NULL,
-            price DECIMAL(12,2),
-            quantity INTEGER,
-            category VARCHAR(100),
-            is_weight BOOLEAN
+            name VARCHAR(100) NOT NULL,
+            capabilities JSONB,
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         );
-        -- [Nota: Para asegurar total robustez, añadiría aquí el resto de tablas...]
+        CREATE TABLE IF NOT EXISTS bot_settings (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id UUID REFERENCES tenants(id),
+            bot_profile_id UUID REFERENCES bot_profiles(id),
+            bot_name VARCHAR(100),
+            welcome_message TEXT,
+            farewell_message TEXT,
+            handoff_message TEXT,
+            support_email VARCHAR(255),
+            is_global_active BOOLEAN DEFAULT TRUE,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS bot_nodes (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id UUID REFERENCES tenants(id),
+            bot_profile_id UUID REFERENCES bot_profiles(id),
+            name VARCHAR(100) NOT NULL,
+            prompt TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS bot_options (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id UUID REFERENCES tenants(id),
+            node_id UUID REFERENCES bot_nodes(id),
+            bot_profile_id UUID REFERENCES bot_profiles(id),
+            label VARCHAR(100) NOT NULL,
+            next_node_id UUID,
+            action VARCHAR(100)
+        );
+        CREATE TABLE IF NOT EXISTS credentials (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id UUID REFERENCES tenants(id),
+            service_name VARCHAR(100),
+            account_alias VARCHAR(100),
+            api_key TEXT,
+            secret TEXT,
+            metadata JSONB
+        );
+        CREATE TABLE IF NOT EXISTS whatsapp_conversations (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id UUID REFERENCES tenants(id),
+            phone_number VARCHAR(50) NOT NULL,
+            sender_type VARCHAR(50),
+            message TEXT,
+            message_type VARCHAR(50),
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
     """)
     )
 
