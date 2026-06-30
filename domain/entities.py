@@ -43,15 +43,15 @@ class Sale:
 @dataclass
 class Customer:
     phone: str
-    name: Optional[str] = None
-    email: Optional[str] = None
-    tenant_id: UUID
+    tenant_id: UUID  # Movido arriba: obligatorio
+    name: Optional[str] = None  # Opcional
+    email: Optional[str] = None  # Opcional
     id: UUID = field(default_factory=uuid4)
 
 
 @dataclass
 class BotConfig:
     name: str
-    settings: Dict[str, Any] = field(default_factory=dict)
-    tenant_id: UUID
+    tenant_id: UUID  # Movido arriba: obligatorio
+    settings: Dict[str, Any] = field(default_factory=dict)  # Opcional
     id: UUID = field(default_factory=uuid4)
