@@ -50,7 +50,7 @@ class SchemaSync:
             "CREATE TABLE IF NOT EXISTS dev_logs (id SERIAL PRIMARY KEY, command VARCHAR(100), params JSONB, result JSONB, error TEXT, execution_time_ms INTEGER, user_id UUID, tenant_id UUID REFERENCES tenants(id), role VARCHAR(50), created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP);",
             "CREATE TABLE IF NOT EXISTS error_logs (id SERIAL PRIMARY KEY, tenant_id UUID REFERENCES tenants(id), source VARCHAR(100), message TEXT, stack_trace TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP);",
             # 6. Permissions
-            "CREATE TABLE IF NOT EXISTS permissions (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), code VARCHAR(100) UNIQUE NOT NULL, description VARCHAR(255), module VARCHAR(50));",
+            "CREATE TABLE IF NOT EXISTS permissions (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), code VARCHAR(100) UNIQUE NOT NULL, description VARCHAR(255), module VARCHAR(50), created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, metadata_json JSONB DEFAULT '{}');",
             "CREATE TABLE IF NOT EXISTS plan_permissions (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), plan_name VARCHAR(50) NOT NULL, permission_id UUID REFERENCES permissions(id));",
             "CREATE TABLE IF NOT EXISTS user_permissions (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID REFERENCES users(id), permission_id UUID REFERENCES permissions(id), is_granted BOOLEAN DEFAULT true);",
         ]
