@@ -48,5 +48,4 @@ class UserPermission(Base):
     permission_id = Column(UUID(as_uuid=True), ForeignKey("permissions.id"), nullable=False)
     is_granted = Column(Boolean, default=True)  # True = Otorgado, False = Revocado explícitamente
 
-    user = relationship("User")
     permission = relationship("Permission")
