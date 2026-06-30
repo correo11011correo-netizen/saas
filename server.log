@@ -1,0 +1,139 @@
+INFO:     Started server process [170394]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+DEBUG: core.auth file = core.auth
+DEBUG: Sirviendo archivos estáticos desde: /home/adrian/Escritorio/commands/frontends
+DEBUG: Contenido de /home/adrian/Escritorio/commands/frontends: ['package.json', '__pycache__', 'mercado-pago', 'server_node.log', 'js', 'eslint.config.js', 'whatsapp', 'visualizer_server.py', 'package-lock.json', 'css', 'node_modules', 'index.html', 'server_debug.log', 'validate_frontends.py', 'stock']
+DEBUG: Contenido de /home/adrian/Escritorio/commands/frontends/mercado-pago: ['README.md', 'js', 'css', 'index.html']
+--- SERVIDOR LEVANTANDO EN PUERTO: 8000 ---
+DEBUG: Petición recibida: GET /stock
+INFO:     127.0.0.1:52742 - "GET /stock HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/module-loader.js
+INFO:     127.0.0.1:52742 - "GET /static/js/module-loader.js HTTP/1.1" 304 Not Modified
+DEBUG: Petición recibida: GET /static/css/common.css
+INFO:     127.0.0.1:52742 - "GET /static/css/common.css?v=1782236176004 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/stock/css/theme.css
+INFO:     127.0.0.1:52742 - "GET /static/stock/css/theme.css?v=1782236176025 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/init-dock.js
+INFO:     127.0.0.1:52742 - "GET /static/js/init-dock.js?v=1782236176038 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/stock/js/config.js
+INFO:     127.0.0.1:52742 - "GET /static/stock/js/config.js?v=1782236176049 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/stock/js/api.js
+INFO:     127.0.0.1:52754 - "GET /static/stock/js/api.js?v=1782236176063 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/stock/js/app.js
+INFO:     127.0.0.1:52754 - "GET /static/stock/js/app.js?v=1782236176075 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /stock
+DEBUG: Petición recibida: GET /static/js/init-dock.js
+DEBUG: Petición recibida: GET /static/stock/js/config.js
+INFO:     127.0.0.1:46324 - "GET /stock HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46326 - "GET /static/js/init-dock.js?v=1782236176038 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46334 - "GET /static/stock/js/config.js?v=1782236176049 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /stock
+INFO:     127.0.0.1:33172 - "GET /stock HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/css/common.css
+DEBUG: Petición recibida: GET /static/stock/appweb/css/style.css
+INFO:     127.0.0.1:33172 - "GET /static/css/common.css?v=1.0.1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33176 - "GET /static/stock/appweb/css/style.css?v=1.0.1 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/module-loader.js
+INFO:     127.0.0.1:33172 - "GET /static/js/module-loader.js HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/css/common.css
+INFO:     127.0.0.1:33172 - "GET /static/css/common.css?v=1782236613071 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/stock/css/theme.css
+INFO:     127.0.0.1:33172 - "GET /static/stock/css/theme.css?v=1782236613641 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/init-dock.js
+INFO:     127.0.0.1:33172 - "GET /static/js/init-dock.js?v=1782236613661 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/icons.js
+DEBUG: Petición recibida: GET /static/stock/js/config.js
+INFO:     127.0.0.1:33172 - "GET /static/js/icons.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33176 - "GET /static/stock/js/config.js?v=1782236613737 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/apply_icons.js
+DEBUG: Petición recibida: GET /static/stock/js/api.js
+INFO:     127.0.0.1:33176 - "GET /static/js/apply_icons.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33172 - "GET /static/stock/js/api.js?v=1782236613763 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/dock.js
+INFO:     127.0.0.1:33176 - "GET /static/js/dock.js HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/stock/js/app.js
+INFO:     127.0.0.1:33176 - "GET /static/stock/js/app.js?v=1782236613787 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /stock
+INFO:     127.0.0.1:49804 - "GET /stock HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/css/common.css
+INFO:     127.0.0.1:49804 - "GET /static/css/common.css?v=1.0.1 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/stock/appweb/css/style.css
+DEBUG: Petición recibida: GET /static/js/module-loader.js
+INFO:     127.0.0.1:49806 - "GET /static/stock/appweb/css/style.css?v=1.0.1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49814 - "GET /static/js/module-loader.js HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/css/common.css
+INFO:     127.0.0.1:49814 - "GET /static/css/common.css?v=1782236772829 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/stock/css/theme.css
+INFO:     127.0.0.1:49814 - "GET /static/stock/css/theme.css?v=1782236772880 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/init-dock.js
+INFO:     127.0.0.1:49814 - "GET /static/js/init-dock.js?v=1782236772904 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/icons.js
+INFO:     127.0.0.1:49814 - "GET /static/js/icons.js HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/stock/js/config.js
+INFO:     127.0.0.1:49806 - "GET /static/stock/js/config.js?v=1782236772926 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/apply_icons.js
+INFO:     127.0.0.1:49806 - "GET /static/js/apply_icons.js HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/stock/js/api.js
+INFO:     127.0.0.1:49814 - "GET /static/stock/js/api.js?v=1782236772953 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/dock.js
+INFO:     127.0.0.1:49814 - "GET /static/js/dock.js HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/stock/js/app.js
+INFO:     127.0.0.1:49806 - "GET /static/stock/js/app.js?v=1782236772979 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /stock
+INFO:     127.0.0.1:52370 - "GET /stock HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/css/common.css
+DEBUG: Petición recibida: GET /static/stock/appweb/css/style.css
+DEBUG: Petición recibida: GET /static/js/module-loader.js
+INFO:     127.0.0.1:52370 - "GET /static/css/common.css?v=1.0.1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52386 - "GET /static/stock/appweb/css/style.css?v=1.0.1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52388 - "GET /static/js/module-loader.js HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/css/common.css
+INFO:     127.0.0.1:52388 - "GET /static/css/common.css?v=1782236893075 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/stock/css/theme.css
+INFO:     127.0.0.1:52388 - "GET /static/stock/css/theme.css?v=1782236893103 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/init-dock.js
+INFO:     127.0.0.1:52388 - "GET /static/js/init-dock.js?v=1782236893128 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/icons.js
+DEBUG: Petición recibida: GET /static/stock/js/config.js
+INFO:     127.0.0.1:52388 - "GET /static/js/icons.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52386 - "GET /static/stock/js/config.js?v=1782236893149 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/apply_icons.js
+DEBUG: Petición recibida: GET /static/stock/js/api.js
+INFO:     127.0.0.1:52386 - "GET /static/js/apply_icons.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52388 - "GET /static/stock/js/api.js?v=1782236893173 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/dock.js
+DEBUG: Petición recibida: GET /static/stock/js/app.js
+INFO:     127.0.0.1:52388 - "GET /static/js/dock.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52386 - "GET /static/stock/js/app.js?v=1782236893194 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /stock
+INFO:     127.0.0.1:46112 - "GET /stock HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/css/common.css
+INFO:     127.0.0.1:46112 - "GET /static/css/common.css?v=1.0.1 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/stock/appweb/css/style.css
+DEBUG: Petición recibida: GET /static/js/module-loader.js
+INFO:     127.0.0.1:46120 - "GET /static/stock/appweb/css/style.css?v=1.0.1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46124 - "GET /static/js/module-loader.js HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/css/common.css
+INFO:     127.0.0.1:46124 - "GET /static/css/common.css?v=1782237011094 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/stock/css/theme.css
+INFO:     127.0.0.1:46124 - "GET /static/stock/css/theme.css?v=1782237011139 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/init-dock.js
+INFO:     127.0.0.1:46124 - "GET /static/js/init-dock.js?v=1782237011162 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/icons.js
+DEBUG: Petición recibida: GET /static/stock/js/config.js
+INFO:     127.0.0.1:46124 - "GET /static/js/icons.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46120 - "GET /static/stock/js/config.js?v=1782237011181 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/apply_icons.js
+INFO:     127.0.0.1:46120 - "GET /static/js/apply_icons.js HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/stock/js/api.js
+INFO:     127.0.0.1:46124 - "GET /static/stock/js/api.js?v=1782237011206 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/stock/js/app.js
+INFO:     127.0.0.1:46120 - "GET /static/stock/js/app.js?v=1782237011225 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/dock.js
+INFO:     127.0.0.1:46124 - "GET /static/js/dock.js HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [170394]

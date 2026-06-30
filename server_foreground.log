@@ -1,0 +1,39 @@
+INFO:     Started server process [172656]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+DEBUG: core.auth file = core.auth
+DEBUG: Sirviendo archivos estáticos desde: /home/adrian/Escritorio/commands/frontends
+DEBUG: Contenido de /home/adrian/Escritorio/commands/frontends: ['package.json', '__pycache__', 'mercado-pago', 'server_node.log', 'js', 'eslint.config.js', 'whatsapp', 'visualizer_server.py', 'package-lock.json', 'css', 'node_modules', 'index.html', 'server_debug.log', 'validate_frontends.py', 'stock']
+DEBUG: Contenido de /home/adrian/Escritorio/commands/frontends/mercado-pago: ['README.md', 'js', 'css', 'index.html']
+--- SERVIDOR LEVANTANDO EN PUERTO: 8000 ---
+DEBUG: Petición recibida: GET /
+INFO:     127.0.0.1:48420 - "GET / HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/css/common.css
+DEBUG: Petición recibida: GET /static/js/module-loader.js
+INFO:     127.0.0.1:48420 - "GET /static/css/common.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48432 - "GET /static/js/module-loader.js HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /mercado-pago/
+INFO:     127.0.0.1:34546 - "GET /mercado-pago/ HTTP/1.1" 307 Temporary Redirect
+DEBUG: Petición recibida: GET /mercado-pago
+INFO:     127.0.0.1:34546 - "GET /mercado-pago HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/mercado-pago/css/theme.css
+INFO:     127.0.0.1:34546 - "GET /static/mercado-pago/css/theme.css HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/css/common.css
+INFO:     127.0.0.1:34546 - "GET /static/css/common.css?v=1782249571867 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/mercado-pago/css/theme.css
+INFO:     127.0.0.1:34546 - "GET /static/mercado-pago/css/theme.css?v=1782249571887 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/init-dock.js
+INFO:     127.0.0.1:34546 - "GET /static/js/init-dock.js?v=1782249571902 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/icons.js
+INFO:     127.0.0.1:34546 - "GET /static/js/icons.js HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/mercado-pago/js/config.js
+INFO:     127.0.0.1:34546 - "GET /static/mercado-pago/js/config.js?v=1782249572124 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/apply_icons.js
+INFO:     127.0.0.1:34546 - "GET /static/js/apply_icons.js HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/mercado-pago/js/api.js
+INFO:     127.0.0.1:34550 - "GET /static/mercado-pago/js/api.js?v=1782249572167 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/dock.js
+INFO:     127.0.0.1:34550 - "GET /static/js/dock.js HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/mercado-pago/js/app.js
+INFO:     127.0.0.1:34546 - "GET /static/mercado-pago/js/app.js?v=1782249572207 HTTP/1.1" 200 OK

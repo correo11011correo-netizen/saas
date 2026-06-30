@@ -1,0 +1,78 @@
+INFO:     Started server process [173589]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+DEBUG: core.auth file = core.auth
+DEBUG: Sirviendo archivos estáticos desde: /home/adrian/Escritorio/commands/frontends
+DEBUG: Contenido de /home/adrian/Escritorio/commands/frontends: ['package.json', '__pycache__', 'mercado-pago', 'server_node.log', 'js', 'eslint.config.js', 'whatsapp', 'visualizer_server.py', 'package-lock.json', 'css', 'node_modules', 'index.html', 'server_debug.log', 'validate_frontends.py', 'stock']
+DEBUG: Contenido de /home/adrian/Escritorio/commands/frontends/mercado-pago: ['README.md', 'js', 'css', 'index.html']
+--- SERVIDOR LEVANTANDO EN PUERTO: 8000 ---
+DEBUG: Petición recibida: GET /stock
+INFO:     127.0.0.1:34748 - "GET /stock HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/css/common.css
+DEBUG: Petición recibida: GET /static/stock/appweb/css/style.css
+DEBUG: Petición recibida: GET /static/js/module-loader.js
+INFO:     127.0.0.1:34756 - "GET /static/stock/appweb/css/style.css?v=1.0.1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34748 - "GET /static/css/common.css?v=1.0.1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34768 - "GET /static/js/module-loader.js HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/css/common.css
+INFO:     127.0.0.1:34768 - "GET /static/css/common.css?v=1782252551923 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/stock/css/theme.css
+INFO:     127.0.0.1:34768 - "GET /static/stock/css/theme.css?v=1782252551945 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/init-dock.js
+INFO:     127.0.0.1:34768 - "GET /static/js/init-dock.js?v=1782252551967 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/icons.js
+DEBUG: Petición recibida: GET /static/stock/js/config.js
+INFO:     127.0.0.1:34768 - "GET /static/js/icons.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34756 - "GET /static/stock/js/config.js?v=1782252551991 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/apply_icons.js
+DEBUG: Petición recibida: GET /static/stock/js/api.js
+INFO:     127.0.0.1:34756 - "GET /static/js/apply_icons.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34768 - "GET /static/stock/js/api.js?v=1782252552021 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/dock.js
+DEBUG: Petición recibida: GET /static/stock/js/app.js
+INFO:     127.0.0.1:34768 - "GET /static/js/dock.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34756 - "GET /static/stock/js/app.js?v=1782252552050 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: POST /api/execute
+INFO:     127.0.0.1:34756 - "POST /api/execute HTTP/1.1" 200 OK
+DEBUG: Petición recibida: POST /api/execute
+DEBUG: Petición recibida: POST /api/execute
+INFO:     127.0.0.1:34756 - "POST /api/execute HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34784 - "POST /api/execute HTTP/1.1" 200 OK
+DEBUG: Petición recibida: POST /api/execute
+DEBUG: Petición recibida: GET /whatsapp
+INFO:     127.0.0.1:34756 - "GET /whatsapp HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/whatsapp/css/style.css
+INFO:     127.0.0.1:34756 - "GET /static/whatsapp/css/style.css?v=1.0.1 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/css/common.css
+INFO:     127.0.0.1:34756 - "GET /static/css/common.css?v=1782252560681 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/whatsapp/css/style.css
+INFO:     127.0.0.1:34756 - "GET /static/whatsapp/css/style.css?v=1782252560703 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/whatsapp/css/theme.css
+INFO:     127.0.0.1:34756 - "GET /static/whatsapp/css/theme.css?v=1782252560718 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/init-dock.js
+INFO:     127.0.0.1:34756 - "GET /static/js/init-dock.js?v=1782252560734 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/whatsapp/js/config.js
+INFO:     127.0.0.1:34756 - "GET /static/whatsapp/js/config.js?v=1782252560788 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/whatsapp/js/api.js
+INFO:     127.0.0.1:34756 - "GET /static/whatsapp/js/api.js?v=1782252560888 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/whatsapp/js/app.js
+INFO:     127.0.0.1:34756 - "GET /static/whatsapp/js/app.js?v=1782252560913 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /mercado-pago
+INFO:     127.0.0.1:59952 - "GET /mercado-pago HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/css/common.css
+INFO:     127.0.0.1:59952 - "GET /static/css/common.css HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/mercado-pago/css/theme.css
+INFO:     127.0.0.1:59964 - "GET /static/mercado-pago/css/theme.css HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/css/common.css
+INFO:     127.0.0.1:59964 - "GET /static/css/common.css?v=1782252568379 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/mercado-pago/css/theme.css
+INFO:     127.0.0.1:59964 - "GET /static/mercado-pago/css/theme.css?v=1782252568399 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/js/init-dock.js
+INFO:     127.0.0.1:59964 - "GET /static/js/init-dock.js?v=1782252568411 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/mercado-pago/js/config.js
+INFO:     127.0.0.1:59964 - "GET /static/mercado-pago/js/config.js?v=1782252568470 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/mercado-pago/js/api.js
+INFO:     127.0.0.1:59964 - "GET /static/mercado-pago/js/api.js?v=1782252568522 HTTP/1.1" 200 OK
+DEBUG: Petición recibida: GET /static/mercado-pago/js/app.js
+INFO:     127.0.0.1:59964 - "GET /static/mercado-pago/js/app.js?v=1782252568548 HTTP/1.1" 200 OK
