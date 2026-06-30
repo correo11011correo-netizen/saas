@@ -86,9 +86,10 @@ class NexusBootstrap:
 
     def _fresh_start(self, session):
         """Prepara la base de datos desde cero."""
-        logger.info("Creating schema and initializing base data...")
-        self.db.create_tables()
-        # No necesitamos cargar datos de clientes, solo la estructura y permisos.
+        logger.info("Performing Fresh Start initialization...")
+        # Hemos eliminado self.db.create_tables() porque el esquema ya es gestionado
+        # por SchemaSync en el arranque del servidor.
+        # Aquí solo cargaríamos datos semilla básicos si fueran necesarios.
 
     def _handle_migration(self, session):
         """
