@@ -3,6 +3,7 @@ from typing import Any, Generic, TypeVar, List, Optional
 
 T = TypeVar("T")
 
+
 class BaseProvider(ABC, Generic[T]):
     """
     Interface base para cualquier proveedor de datos.

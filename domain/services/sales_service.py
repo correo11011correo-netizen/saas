@@ -1,8 +1,9 @@
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 from uuid import uuid4, UUID
 from motor.application.state import state
-from motor.domain.entities import Sale, SaleItem, Product, Customer
+from motor.domain.entities import Sale, SaleItem, Customer
 from motor.infrastructure.providers.base import BaseProvider
+
 
 class SalesService:
     """
@@ -16,10 +17,19 @@ class SalesService:
     def _get_provider(self, name: str) -> BaseProvider:
         provider = self.state.get_provider(name)
         if not provider:
-            raise Exception(f"Provider '{name}' not connected. Please connect via /admin/connect")
+            raise Exception(
+                f"Provider '{name}' not connected. Please connect via /admin/connect"
+            )
         return provider
 
-    def process_cash_sale(self, tenant_id: UUID, user_id: UUID, customer_phone: str, items_data: List[Dict], paga_con: float) -> Dict[str, Any]:
+    def process_cash_sale(
+        self,
+        tenant_id: UUID,
+        user_id: UUID,
+        customer_phone: str,
+        items_data: List[Dict],
+        paga_con: float,
+    ) -> Dict[str, Any]:
         """
         Lógica completa de 'sales.cobrar'.
         Valida stock, gestiona CRM, calcula totales y registra la venta.
@@ -31,23 +41,27 @@ class SalesService:
         # 1. Validar stock y calcular total (Lógica de Negocio Pura)
         total = 0.0
         processed_items = []
-        
+
         for item in items_data:
             product = stock_provider.get(item["code"])
             if not product:
                 raise ValueError(f"Product {item['code']} not found")
-            
+
             # Validación de stock
             if product.quantity < item["quantity"]:
-                raise ValueError(f"Insufficient stock for {product.name} ({item['code']})")
+                raise ValueError(
+                    f"Insufficient stock for {product.name} ({item['code']})"
+                )
 
             subtotal = product.price * item["quantity"]
             total += subtotal
-            processed_items.append(SaleItem(
-                product_code=product.code,
-                quantity=item["quantity"],
-                price=product.price
-            ))
+            processed_items.append(
+                SaleItem(
+                    product_code=product.code,
+                    quantity=item["quantity"],
+                    price=product.price,
+                )
+            )
 
         # 2. Integración CRM: Obtener o crear cliente
         customer = crm_provider.get(customer_phone)
@@ -65,7 +79,7 @@ class SalesService:
             customer_id=customer.id,
             total=total,
             tenant_id=tenant_id,
-            items=processed_items
+            items=processed_items,
         )
         saved_sale = sales_provider.save(sale)
 
@@ -75,7 +89,7 @@ class SalesService:
             product = stock_provider.get(item.product_code)
             product.quantity -= item.quantity
             stock_provider.save(product)
-            
+
             # Registrar movimiento (asumiendo que el provider tiene método add_movement)
             if hasattr(stock_provider, "add_movement"):
                 stock_provider.add_movement(
@@ -83,17 +97,19 @@ class SalesService:
                     quantity=-item.quantity,
                     reason="SALE",
                     user_id=user_id,
-                    tenant_id=tenant_id
+                    tenant_id=tenant_id,
                 )
 
-        return {
-            "sale_id": saved_sale.id,
-            "total": total,
-            "vuelto": vuelto
-        }
+        return {"sale_id": saved_sale.id, "total": total, "vuelto": vuelto}
 
-    def create_digital_order(self, tenant_id: UUID, items_data: List[Dict], total: float, 
-                               account_alias: str, client_request_id: Optional[str] = None) -> Dict[str, Any]:
+    def create_digital_order(
+        self,
+        tenant_id: UUID,
+        items_data: List[Dict],
+        total: float,
+        account_alias: str,
+        client_request_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Lógica de 'sales.create'.
         Maneja idempotencia, credenciales de pago y creación de orden pendiente.
@@ -115,18 +131,19 @@ class SalesService:
 
         # 2. Crear Orden Pendiente
         sale = Sale(
-            customer_id=uuid4(), # Temporal hasta confirmación
+            customer_id=uuid4(),  # Temporal hasta confirmación
             total=total,
             tenant_id=tenant_id,
-            items=[SaleItem(product_code=i["code"], quantity=i["qty"], price=i["price"]) for i in items_data]
+            items=[
+                SaleItem(product_code=i["code"], quantity=i["qty"], price=i["price"])
+                for i in items_data
+            ],
         )
         saved_sale = sales_provider.save(sale)
 
         # 3. Generar Link de Pago (Vía Puerto Externo)
         payment_link = payment_gw.create_preference(
-            amount=total, 
-            external_reference=str(saved_sale.id),
-            api_key=cred.api_key
+            amount=total, external_reference=str(saved_sale.id), api_key=cred.api_key
         )
 
         # 4. Actualizar orden con el link
@@ -134,6 +151,7 @@ class SalesService:
         sales_provider.save(saved_sale)
 
         return {"payment_link": payment_link, "sale_id": saved_sale.id}
+
 
 # Singleton instance
 sales_service = SalesService()

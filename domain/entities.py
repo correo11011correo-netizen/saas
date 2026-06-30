@@ -3,12 +3,14 @@ from uuid import UUID, uuid4
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+
 @dataclass
 class User:
     email: str
     role: str
     tenant_id: UUID
     id: UUID = field(default_factory=uuid4)
+
 
 @dataclass
 class Product:
@@ -19,12 +21,14 @@ class Product:
     tenant_id: UUID
     id: UUID = field(default_factory=uuid4)
 
+
 @dataclass
 class SaleItem:
     product_code: str
     quantity: int
     price: float
     id: UUID = field(default_factory=uuid4)
+
 
 @dataclass
 class Sale:
@@ -35,6 +39,7 @@ class Sale:
     timestamp: datetime = field(default_factory=datetime.now)
     id: UUID = field(default_factory=uuid4)
 
+
 @dataclass
 class Customer:
     phone: str
@@ -42,6 +47,7 @@ class Customer:
     email: Optional[str] = None
     tenant_id: UUID
     id: UUID = field(default_factory=uuid4)
+
 
 @dataclass
 class BotConfig:

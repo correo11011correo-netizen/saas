@@ -2,30 +2,32 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Body
 from typing import Any, Dict
 from pydantic import BaseModel
-from uuid import uuid4
 
 from motor.application.state import state
 from motor.domain.service import service
 from motor.infrastructure.providers.mock import MockProvider
+from motor.infrastructure.persistence.sqlalchemy.user_provider import UserSqlProvider
+from motor.infrastructure.persistence.sqlalchemy.product_provider import (
+    ProductSqlProvider,
+)
+from motor.infrastructure.persistence.sqlalchemy.sale_provider import SaleSqlProvider
+from motor.infrastructure.persistence.sqlalchemy.customer_provider import (
+    CustomerSqlProvider,
+)
+from motor.infrastructure.persistence.sqlalchemy.bot_provider import BotSqlProvider
+from backup.core.database import session_factory  # Adjusted path to backup
 
 app = FastAPI(title="Business Engine Daemon")
 
-# --- MODELS FOR ADMIN ---
+
 class ConnectionRequest(BaseModel):
     function_name: str
     provider_type: str  # 'mock', 'sqlalchemy', 'api'
     connection_string: str = ""
 
-# --- ADMIN ENDPOINTS (Puente de Administración) ---
-
-from motor.infrastructure.persistence.sqlalchemy.user_provider import UserSqlProvider
-from motor.infrastructure.persistence.sqlalchemy.product_provider import ProductSqlProvider
-from motor.infrastructure.persistence.sqlalchemy.sale_provider import SaleSqlProvider
-from motor.infrastructure.persistence.sqlalchemy.customer_provider import CustomerSqlProvider
-from motor.infrastructure.persistence.sqlalchemy.bot_provider import BotSqlProvider
-from core.database import session_factory # Import existing session factory
 
 # ... (previous imports)
+
 
 @app.post("/admin/connect")
 async def connect_provider(req: ConnectionRequest):
@@ -41,29 +43,41 @@ async def connect_provider(req: ConnectionRequest):
             "stock": ProductSqlProvider,
             "sales": SaleSqlProvider,
             "crm": CustomerSqlProvider,
-            "bots": BotSqlProvider
+            "bots": BotSqlProvider,
         }
         provider_class = mapping.get(req.function_name)
         if not provider_class:
-            raise HTTPException(status_code=400, detail=f"No SQLAlchemy provider for {req.function_name}")
-        
+            raise HTTPException(
+                status_code=400,
+                detail=f"No SQLAlchemy provider for {req.function_name}",
+            )
+
         # Inject the real session factory from the project
-        provider = provider_class(session_factory=session_factory, model_class=provider_class.model_class if hasattr(provider_class, 'model_class') else None)
+        provider = provider_class(
+            session_factory=session_factory,
+            model_class=provider_class.model_class
+            if hasattr(provider_class, "model_class")
+            else None,
+        )
         # Note: For a more robust implementation, the model_class would be defined inside the provider class.
     else:
-        raise HTTPException(status_code=400, detail=f"Provider type {req.provider_type} not implemented yet.")
-    
+        raise HTTPException(
+            status_code=400,
+            detail=f"Provider type {req.provider_type} not implemented yet.",
+        )
+
     state.set_provider(req.function_name, provider)
-    return {"success": True, "message": f"Provider {req.provider_type} connected to {req.function_name}"}
+    return {
+        "success": True,
+        "message": f"Provider {req.provider_type} connected to {req.function_name}",
+    }
 
 
 @app.get("/admin/status")
 async def get_system_status():
     """Retorna el estado de salud de todos los puentes conectados."""
-    return {
-        "engine_status": "active",
-        "providers": state.get_all_status()
-    }
+    return {"engine_status": "active", "providers": state.get_all_status()}
+
 
 @app.post("/admin/disconnect")
 async def disconnect_provider(function_name: str):
@@ -73,7 +87,9 @@ async def disconnect_provider(function_name: str):
         return {"success": True, "message": f"Disconnected {function_name}"}
     raise HTTPException(status_code=404, detail="Provider not found")
 
+
 # --- BUSINESS ENDPOINTS (Puente de Interfaz) ---
+
 
 @app.post("/api/sale/create")
 async def create_sale(data: Dict[str, Any] = Body(...), tenant_id: str = "default"):
@@ -87,6 +103,7 @@ async def create_sale(data: Dict[str, Any] = Body(...), tenant_id: str = "defaul
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/product/{code}")
 async def get_product(code: str, tenant_id: str = "default"):
     """
@@ -97,6 +114,7 @@ async def get_product(code: str, tenant_id: str = "default"):
         return {"success": True, "data": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     # Ejecución del Daemon

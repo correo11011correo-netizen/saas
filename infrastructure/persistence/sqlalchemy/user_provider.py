@@ -1,7 +1,7 @@
-from uuid import UUID
 from motor.infrastructure.persistence.sqlalchemy.base_provider import SqlAlchemyProvider
 from motor.domain.entities import User
-from core.models import User as DBUser # Asumiendo que el modelo original está aquí
+from core.models import User as DBUser  # Asumiendo que el modelo original está aquí
+
 
 class UserSqlProvider(SqlAlchemyProvider):
     def _to_domain(self, db_model: DBUser) -> User:
@@ -9,7 +9,7 @@ class UserSqlProvider(SqlAlchemyProvider):
             id=db_model.id,
             email=db_model.email,
             role=db_model.role,
-            tenant_id=db_model.tenant_id
+            tenant_id=db_model.tenant_id,
         )
 
     def _to_db(self, entity: User) -> DBUser:
@@ -17,5 +17,5 @@ class UserSqlProvider(SqlAlchemyProvider):
             id=entity.id,
             email=entity.email,
             role=entity.role,
-            tenant_id=entity.tenant_id
+            tenant_id=entity.tenant_id,
         )

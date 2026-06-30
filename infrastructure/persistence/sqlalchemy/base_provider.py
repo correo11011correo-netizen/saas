@@ -1,15 +1,16 @@
-from typing import Any, Generic, TypeVar, List, Optional
-from sqlalchemy.orm import Session
-from sqlalchemy import select, update, delete
+from typing import Any, TypeVar, List, Optional
+from sqlalchemy import select
 from motor.infrastructure.providers.base import BaseProvider
 
 T = TypeVar("T")
+
 
 class SqlAlchemyProvider(BaseProvider[T]):
     """
     Implementación de BaseProvider usando SQLAlchemy.
     Actúa como el adaptador que traduce las órdenes del núcleo a SQL.
     """
+
     def __init__(self, session_factory, model_class):
         self.session_factory = session_factory
         self.model_class = model_class
@@ -19,16 +20,20 @@ class SqlAlchemyProvider(BaseProvider[T]):
             entity = session.get(self.model_class, id)
             return self._to_domain(entity) if entity else None
 
-    def list(self, filters: dict = None, limit: int = None, offset: int = None) -> List[T]:
+    def list(
+        self, filters: dict = None, limit: int = None, offset: int = None
+    ) -> List[T]:
         with self.session_factory() as session:
             query = select(self.model_class)
             if filters:
                 for key, value in filters.items():
                     query = query.where(getattr(self.model_class, key) == value)
-            
-            if limit: query = query.limit(limit)
-            if offset: query = query.offset(offset)
-            
+
+            if limit:
+                query = query.limit(limit)
+            if offset:
+                query = query.offset(offset)
+
             result = session.execute(query).scalars().all()
             return [self._to_domain(row) for row in result]
 
@@ -36,7 +41,7 @@ class SqlAlchemyProvider(BaseProvider[T]):
         with self.session_factory() as session:
             # Convertir entidad de dominio a modelo de DB
             db_model = self._to_db(entity)
-            
+
             # Merge maneja tanto insert como update basándose en la PK
             merged = session.merge(db_model)
             session.commit()

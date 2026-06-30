@@ -1,27 +1,29 @@
-from uuid import UUID
-from typing import List, Optional, Any
+from typing import List
 from motor.infrastructure.persistence.sqlalchemy.base_provider import SqlAlchemyProvider
 from motor.domain.entities import Sale, SaleItem
 from sales.models import Sale as DBSale, SaleItem as DBSaleItem
+
 
 class SaleSqlProvider(SqlAlchemyProvider):
     def _to_domain(self, db_model: DBSale) -> Sale:
         # Recuperar items asociados
         items = []
-        if hasattr(db_model, 'items'):
+        if hasattr(db_model, "items"):
             for item in db_model.items:
-                items.append(SaleItem(
-                    product_code=item.product_code,
-                    quantity=item.quantity,
-                    price=float(item.price)
-                ))
-        
+                items.append(
+                    SaleItem(
+                        product_code=item.product_code,
+                        quantity=item.quantity,
+                        price=float(item.price),
+                    )
+                )
+
         return Sale(
             id=db_model.id,
             customer_id=db_model.customer_id,
             total=float(db_model.total),
             tenant_id=db_model.tenant_id,
-            items=items
+            items=items,
         )
 
     def _to_db(self, entity: Sale) -> DBSale:
@@ -31,7 +33,7 @@ class SaleSqlProvider(SqlAlchemyProvider):
             id=entity.id,
             customer_id=entity.customer_id,
             total=entity.total,
-            tenant_id=entity.tenant_id
+            tenant_id=entity.tenant_id,
         )
 
     def save_with_items(self, sale: Sale, items: List[SaleItem]):
@@ -41,7 +43,7 @@ class SaleSqlProvider(SqlAlchemyProvider):
         with self.session_factory() as session:
             db_sale = self._to_db(sale)
             session.merge(db_sale)
-            
+
             for item in items:
                 db_item = DBSaleItem(
                     id=item.id,
@@ -49,9 +51,9 @@ class SaleSqlProvider(SqlAlchemyProvider):
                     product_code=item.product_code,
                     qty=item.quantity,
                     price=item.price,
-                    tenant_id=sale.tenant_id
+                    tenant_id=sale.tenant_id,
                 )
                 session.add(db_item)
-            
+
             session.commit()
             return sale

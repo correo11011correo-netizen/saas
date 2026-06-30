@@ -1,11 +1,13 @@
 from typing import Dict, Any, Optional
 from motor.infrastructure.providers.base import BaseProvider
 
+
 class EngineState:
     """
     El corazón del sistema. Gestiona los 'enchufes' (providers) activos.
      Permite cambiar la fuente de datos en caliente sin reiniciar el daemon.
     """
+
     _instance = None
 
     def __new__(cls):
@@ -27,10 +29,11 @@ class EngineState:
         return {
             name: {
                 "connected": provider.health_check(),
-                "type": provider.__class__.__name__
+                "type": provider.__class__.__name__,
             }
             for name, provider in self.providers.items()
         }
+
 
 # Singleton instance
 state = EngineState()

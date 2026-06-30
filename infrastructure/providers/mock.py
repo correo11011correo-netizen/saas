@@ -1,12 +1,13 @@
 from typing import Any, List, Optional, Dict
 from motor.infrastructure.providers.base import BaseProvider
-from motor.domain.entities import User, Product, Sale, Customer, BotConfig
+
 
 class MockProvider(BaseProvider):
     """
     Proveedor de datos en memoria para pruebas rápidas.
     Permite que el sistema funcione sin ninguna base de datos conectada.
     """
+
     def __init__(self, entity_type: str):
         self.entity_type = entity_type
         self.data: Dict[Any, Any] = {}
