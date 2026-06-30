@@ -1,6 +1,6 @@
 from typing import Any
-from motor.application.state import state
-from motor.domain.entities import Sale
+from application.state import state
+from domain.entities import Sale
 
 
 class BusinessService:

@@ -1,8 +1,8 @@
 from typing import Any, Dict, List, Optional
 from uuid import uuid4, UUID
-from motor.application.state import state
-from motor.domain.entities import Sale, SaleItem, Customer
-from motor.infrastructure.providers.base import BaseProvider
+from application.state import state
+from domain.entities import Sale, SaleItem, Customer
+from infrastructure.providers.base import BaseProvider
 
 
 class SalesService:

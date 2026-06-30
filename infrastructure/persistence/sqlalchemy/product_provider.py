@@ -1,6 +1,6 @@
 from uuid import UUID
-from motor.infrastructure.persistence.sqlalchemy.base_provider import SqlAlchemyProvider
-from motor.domain.entities import Product
+from infrastructure.persistence.sqlalchemy.base_provider import SqlAlchemyProvider
+from domain.entities import Product
 from stock.models import Product as DBProduct
 
 

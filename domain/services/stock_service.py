@@ -1,8 +1,8 @@
 from typing import List
 from uuid import UUID
-from motor.application.state import state
-from motor.domain.entities import Product
-from motor.infrastructure.providers.base import BaseProvider
+from application.state import state
+from domain.entities import Product
+from infrastructure.providers.base import BaseProvider
 
 
 class StockService:

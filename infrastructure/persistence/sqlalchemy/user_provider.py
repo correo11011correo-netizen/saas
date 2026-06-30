@@ -1,5 +1,5 @@
-from motor.infrastructure.persistence.sqlalchemy.base_provider import SqlAlchemyProvider
-from motor.domain.entities import User
+from infrastructure.persistence.sqlalchemy.base_provider import SqlAlchemyProvider
+from domain.entities import User
 from core.models import User as DBUser  # Asumiendo que el modelo original está aquí
 
 

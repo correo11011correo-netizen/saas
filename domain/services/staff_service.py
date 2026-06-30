@@ -1,8 +1,8 @@
 from typing import Optional
 from uuid import UUID
-from motor.application.state import state
-from motor.domain.entities import Employee, EmployeePermission
-from motor.infrastructure.providers.base import BaseProvider
+from application.state import state
+from domain.entities import Employee, EmployeePermission
+from infrastructure.providers.base import BaseProvider
 
 
 class StaffService:
@@ -32,7 +32,7 @@ class StaffService:
         if definition:
             definition.label = label
         else:
-            from motor.domain.entities import BusinessDefinition
+            from domain.entities import BusinessDefinition
 
             definition = BusinessDefinition(
                 tenant_id=tenant_id, def_type=def_type, def_key=key, def_label=label

@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional
-from motor.infrastructure.providers.base import BaseProvider
+from infrastructure.providers.base import BaseProvider
 
 
 class EngineState:

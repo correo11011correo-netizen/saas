@@ -1,6 +1,6 @@
 from typing import Any, TypeVar, List, Optional
 from sqlalchemy import select
-from motor.infrastructure.providers.base import BaseProvider
+from infrastructure.providers.base import BaseProvider
 
 T = TypeVar("T")
 

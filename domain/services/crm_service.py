@@ -1,8 +1,8 @@
 from typing import Any, Optional, Dict
 from uuid import UUID
-from motor.application.state import state
-from motor.domain.entities import Customer
-from motor.infrastructure.providers.base import BaseProvider
+from application.state import state
+from domain.entities import Customer
+from infrastructure.providers.base import BaseProvider
 
 
 class CRMService:

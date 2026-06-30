@@ -1,5 +1,5 @@
 from typing import Any, List, Optional, Dict
-from motor.infrastructure.providers.base import BaseProvider
+from infrastructure.providers.base import BaseProvider
 
 
 class MockProvider(BaseProvider):

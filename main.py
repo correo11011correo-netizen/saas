@@ -3,18 +3,18 @@ from fastapi import FastAPI, HTTPException, Body
 from typing import Any, Dict
 from pydantic import BaseModel
 
-from motor.application.state import state
-from motor.domain.service import service
-from motor.infrastructure.providers.mock import MockProvider
-from motor.infrastructure.persistence.sqlalchemy.user_provider import UserSqlProvider
-from motor.infrastructure.persistence.sqlalchemy.product_provider import (
+from application.state import state
+from domain.service import service
+from infrastructure.providers.mock import MockProvider
+from infrastructure.persistence.sqlalchemy.user_provider import UserSqlProvider
+from infrastructure.persistence.sqlalchemy.product_provider import (
     ProductSqlProvider,
 )
-from motor.infrastructure.persistence.sqlalchemy.sale_provider import SaleSqlProvider
-from motor.infrastructure.persistence.sqlalchemy.customer_provider import (
+from infrastructure.persistence.sqlalchemy.sale_provider import SaleSqlProvider
+from infrastructure.persistence.sqlalchemy.customer_provider import (
     CustomerSqlProvider,
 )
-from motor.infrastructure.persistence.sqlalchemy.bot_provider import BotSqlProvider
+from infrastructure.persistence.sqlalchemy.bot_provider import BotSqlProvider
 from backup.core.database import session_factory  # Adjusted path to backup
 
 app = FastAPI(title="Business Engine Daemon")

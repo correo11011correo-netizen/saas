@@ -1,7 +1,7 @@
 from uuid import UUID
 from typing import Optional
-from motor.infrastructure.persistence.sqlalchemy.base_provider import SqlAlchemyProvider
-from motor.domain.entities import Customer
+from infrastructure.persistence.sqlalchemy.base_provider import SqlAlchemyProvider
+from domain.entities import Customer
 from crm.models import Customer as DBCustomer
 
 

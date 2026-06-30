@@ -1,8 +1,8 @@
 from typing import Any, Optional, Dict
 from uuid import UUID
-from motor.application.state import state
-from motor.domain.entities import BotConfig
-from motor.infrastructure.providers.base import BaseProvider
+from application.state import state
+from domain.entities import BotConfig
+from infrastructure.providers.base import BaseProvider
 
 
 class BotService:
@@ -45,7 +45,7 @@ class BotService:
             bot_id = default_bot[0].id if default_bot else None
 
             # Crear nueva sesión (asumiendo entidad WhatsappSession)
-            from motor.domain.entities import BotSession
+            from domain.entities import BotSession
 
             new_session = BotSession(
                 phone=phone,
@@ -91,7 +91,7 @@ class BotService:
         if node:
             node.prompt = prompt
         else:
-            from motor.domain.entities import BotNode
+            from domain.entities import BotNode
 
             node = BotNode(
                 name=name,

@@ -1,6 +1,6 @@
 from typing import List
-from motor.infrastructure.persistence.sqlalchemy.base_provider import SqlAlchemyProvider
-from motor.domain.entities import Sale, SaleItem
+from infrastructure.persistence.sqlalchemy.base_provider import SqlAlchemyProvider
+from domain.entities import Sale, SaleItem
 from sales.models import Sale as DBSale, SaleItem as DBSaleItem
 
 
