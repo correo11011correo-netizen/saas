@@ -1,12 +1,12 @@
 import logging
 
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from core.context import TenantContext
 from core.decorators import command
 from core.types import ServiceResponse
+from db_engine.repositories.product_repo import ProductRepository
 
 logger = logging.getLogger("OmniCore.StockCommands")
 
@@ -29,8 +29,11 @@ class StockImportModel(BaseModel):
 class StockCommandHandler:
     """
     Implementación de comandos de Stock Multi-tenant.
-    Utiliza SQL directo para garantizar la independencia de repositorios.
+    Utiliza ProductRepository para la persistencia de datos.
     """
+
+    def _get_repo(self, session: Session) -> ProductRepository:
+        return ProductRepository(session)
 
     @command(
         name="products.list",
@@ -43,16 +46,10 @@ class StockCommandHandler:
         context: TenantContext,
     ) -> ServiceResponse:
         try:
-            result = (
-                session.execute(
-                    text("SELECT * FROM products WHERE tenant_id = :tid ORDER BY name ASC"),
-                    {"tid": context.tenant_id},
-                )
-                .mappings()
-                .all()
-            )
+            repo = self._get_repo(session)
+            result = repo.list_all(context.tenant_id)
             return ServiceResponse.success_res(
-                data=[dict(row) for row in result],
+                data=result,
                 message="Products retrieved successfully.",
             )
         except Exception as e:
@@ -84,16 +81,8 @@ class StockCommandHandler:
         is_weight: bool = False,
     ) -> ServiceResponse:
         try:
-            # Upsert product for this tenant
-            session.execute(
-                text(
-                    """
-                    INSERT INTO products (code, name, price, quantity, category, is_weight, tenant_id)
-                    VALUES (:code, :name, :price, :quantity, :category, :is_weight, :tid)
-                    ON CONFLICT (code, tenant_id) DO UPDATE
-                    SET name = EXCLUDED.name, price = EXCLUDED.price, quantity = EXCLUDED.quantity, category = EXCLUDED.category, is_weight = EXCLUDED.is_weight
-                """
-                ),
+            repo = self._get_repo(session)
+            repo.upsert(
                 {
                     "code": code,
                     "name": name,
@@ -102,21 +91,15 @@ class StockCommandHandler:
                     "category": category,
                     "is_weight": is_weight,
                     "tid": context.tenant_id,
-                },
+                }
             )
 
-            # Record movement
-            session.execute(
-                text(
-                    "INSERT INTO stock_movements (product_code, quantity, reason, user_id, tenant_id) VALUES (:code, :qty, :reason, :uid, :tid)"
-                ),
-                {
-                    "code": code,
-                    "qty": quantity,
-                    "reason": "INITIAL_LOAD" if quantity > 0 else "UPDATE",
-                    "uid": context.user_id,
-                    "tid": context.tenant_id,
-                },
+            repo.add_movement(
+                code=code,
+                quantity=quantity,
+                reason="INITIAL_LOAD" if quantity > 0 else "UPDATE",
+                user_id=context.user_id,
+                tenant_id=context.tenant_id,
             )
 
             session.commit()
@@ -139,43 +122,20 @@ class StockCommandHandler:
         reason: str = "MANUAL",
     ) -> ServiceResponse:
         try:
-            # Get current quantity with lock
-            result = (
-                session.execute(
-                    text(
-                        "SELECT quantity FROM products WHERE code = :code AND tenant_id = :tid FOR UPDATE"
-                    ),
-                    {"code": code, "tid": context.tenant_id},
-                )
-                .mappings()
-                .first()
-            )
+            repo = self._get_repo(session)
+            new_qty = repo.update_quantity(code, context.tenant_id, quantity)
 
-            if not result:
+            if new_qty is None:
                 return ServiceResponse.error_res(f"Product {code} not found", "PRODUCT_NOT_FOUND")
-
-            new_qty = result["quantity"] + quantity
             if new_qty < 0:
                 return ServiceResponse.error_res("Insufficient stock", "STOCK_INSUFFICIENT")
 
-            # Update quantity
-            session.execute(
-                text("UPDATE products SET quantity = :qty WHERE code = :code AND tenant_id = :tid"),
-                {"qty": new_qty, "code": code, "tid": context.tenant_id},
-            )
-
-            # Record movement
-            session.execute(
-                text(
-                    "INSERT INTO stock_movements (product_code, quantity, reason, user_id, tenant_id) VALUES (:code, :qty, :reason, :uid, :tid)"
-                ),
-                {
-                    "code": code,
-                    "qty": quantity,
-                    "reason": reason,
-                    "uid": context.user_id,
-                    "tid": context.tenant_id,
-                },
+            repo.add_movement(
+                code=code,
+                quantity=quantity,
+                reason=reason,
+                user_id=context.user_id,
+                tenant_id=context.tenant_id,
             )
 
             session.commit()
@@ -196,18 +156,12 @@ class StockCommandHandler:
     )
     def get_product(self, session: Session, context: TenantContext, code: str) -> ServiceResponse:
         try:
-            result = (
-                session.execute(
-                    text("SELECT * FROM products WHERE code = :code AND tenant_id = :tid"),
-                    {"code": code, "tid": context.tenant_id},
-                )
-                .mappings()
-                .first()
-            )
+            repo = self._get_repo(session)
+            product = repo.get_by_code(code, context.tenant_id)
 
-            if not result:
+            if not product:
                 return ServiceResponse.error_res(f"Product {code} not found", "PRODUCT_NOT_FOUND")
-            return ServiceResponse.success_res(data=dict(result), message="Product retrieved.")
+            return ServiceResponse.success_res(data=product, message="Product retrieved.")
         except Exception as e:
             return ServiceResponse.error_res(f"Error fetching product: {str(e)}", "STOCK_GET_ERROR")
 
@@ -223,18 +177,10 @@ class StockCommandHandler:
         threshold: int = 5,
     ) -> ServiceResponse:
         try:
-            result = (
-                session.execute(
-                    text(
-                        "SELECT code, name, quantity FROM products WHERE tenant_id = :tid AND quantity <= :threshold ORDER BY quantity ASC"
-                    ),
-                    {"tid": context.tenant_id, "threshold": threshold},
-                )
-                .mappings()
-                .all()
-            )
+            repo = self._get_repo(session)
+            result = repo.get_critical_stock(context.tenant_id, threshold)
             return ServiceResponse.success_res(
-                data=[dict(row) for row in result],
+                data=result,
                 message=f"Found {len(result)} products below threshold {threshold}.",
             )
         except Exception as e:
