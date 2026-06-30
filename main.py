@@ -30,11 +30,11 @@ from core.deployment_validator import DeploymentValidator
 from core.dev_admin_commands import dev_admin_commands
 from core.dispatcher import dispatcher
 from core.logger import setup_logging
-from core.migrator import run_resilient_migrations
 from core.module_entitlements import module_entitlement_service
 from core.panel_commands import panel_commands
 from core.realtime import realtime_manager
 from core.saas_admin import saas_admin_commands
+from core.schema_sync import SchemaSync
 from core.sdui import sdui_engine
 from core.url_gateway import url_gateway
 from core.webhooks import router as webhook_router
@@ -71,16 +71,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Error crítico en el validador de despliegue: {e}")
 
-    # 1. Ejecutar migraciones resilientes
+    # 1. Sincronización Automática de Esquema (Sustituye a Alembic)
     try:
-        logger.info("Step 1/3: Ejecutando migraciones de Alembic...")
-        run_resilient_migrations()
-        logger.info("✅ Migraciones completadas.")
+        logger.info("Step 1/3: Sincronizando esquema de base de datos...")
+        syncer = SchemaSync(engine)
+        syncer.sync()
+        logger.info("✅ Esquema sincronizado.")
     except Exception as e:
-        logger.critical(f"❌ Error crítico en migraciones: {e}", exc_info=True)
-        # No lanzamos la excepción inmediatamente para permitir que el servidor
-        # inicie y podamos ver el error vía health-check o logs,
-        # pero marcamos el sistema como inestable.
+        logger.critical(f"❌ Error crítico en la sincronización del esquema: {e}", exc_info=True)
+        # Permitimos que el servidor inicie para diagnóstico, pero marcamos inestabilidad.
 
     # 2. Ejecutar el Bootstrap de NexusDB
     try:
