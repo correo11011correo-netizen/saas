@@ -1,12 +1,12 @@
 import logging
 
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from core.context import TenantContext
 from core.decorators import command
 from core.types import ServiceResponse
+from core.data_commands import data_commands
 
 logger = logging.getLogger("OmniCore.StockCommands")
 
@@ -29,7 +29,7 @@ class StockImportModel(BaseModel):
 class StockCommandHandler:
     """
     Implementación de comandos de Stock Multi-tenant.
-    Utiliza SQL directo para garantizar la independencia de repositorios.
+    Utiliza el Motor de Datos para abstraer la persistencia.
     """
 
     @command(
@@ -43,16 +43,14 @@ class StockCommandHandler:
         context: TenantContext,
     ) -> ServiceResponse:
         try:
-            result = (
-                session.execute(
-                    text("SELECT * FROM products WHERE tenant_id = :tid ORDER BY name ASC"),
-                    {"tid": context.tenant_id},
-                )
-                .mappings()
-                .all()
+            res = data_commands.query_data(
+                session, context, entity="products", sort_by="name", sort_order="ASC"
             )
+            if not res.success:
+                return res
+            
             return ServiceResponse.success_res(
-                data=[dict(row) for row in result],
+                data=res.data,
                 message="Products retrieved successfully.",
             )
         except Exception as e:
@@ -84,39 +82,47 @@ class StockCommandHandler:
         is_weight: bool = False,
     ) -> ServiceResponse:
         try:
-            # Upsert product for this tenant
-            session.execute(
-                text(
-                    """
-                    INSERT INTO products (code, name, price, quantity, category, is_weight, tenant_id)
-                    VALUES (:code, :name, :price, :quantity, :category, :is_weight, :tid)
-                    ON CONFLICT (code, tenant_id) DO UPDATE
-                    SET name = EXCLUDED.name, price = EXCLUDED.price, quantity = EXCLUDED.quantity, category = EXCLUDED.category, is_weight = EXCLUDED.is_weight
-                """
-                ),
-                {
-                    "code": code,
-                    "name": name,
-                    "price": price,
-                    "quantity": quantity,
-                    "category": category,
-                    "is_weight": is_weight,
-                    "tid": context.tenant_id,
-                },
+            # Verificar si el producto ya existe para decidir entre insert o patch
+            res_exists = data_commands.query_data(
+                session, context, entity="products", filters={"code": code}
             )
+            
+            product_data = {
+                "code": code,
+                "name": name,
+                "price": price,
+                "quantity": quantity,
+                "category": category,
+                "is_weight": is_weight,
+            }
+
+            if res_exists.success and res_exists.data:
+                # Actualizar existente
+                prod_id = res_exists.data[0]["id"]
+                patch_res = data_commands.patch_data(
+                    session, context, entity="products", record_id=prod_id, updates=product_data
+                )
+                if not patch_res.success:
+                    return patch_res
+            else:
+                # Insertar nuevo
+                insert_res = data_commands.insert_data(
+                    session, context, entity="products", data=product_data
+                )
+                if not insert_res.success:
+                    return insert_res
 
             # Record movement
-            session.execute(
-                text(
-                    "INSERT INTO stock_movements (product_code, quantity, reason, user_id, tenant_id) VALUES (:code, :qty, :reason, :uid, :tid)"
-                ),
-                {
-                    "code": code,
-                    "qty": quantity,
+            data_commands.insert_data(
+                session, 
+                context, 
+                entity="stock_movements", 
+                data={
+                    "product_code": code,
+                    "quantity": quantity,
                     "reason": "INITIAL_LOAD" if quantity > 0 else "UPDATE",
-                    "uid": context.user_id,
-                    "tid": context.tenant_id,
-                },
+                    "user_id": context.user_id,
+                }
             )
 
             session.commit()
@@ -139,43 +145,42 @@ class StockCommandHandler:
         reason: str = "MANUAL",
     ) -> ServiceResponse:
         try:
-            # Get current quantity with lock
-            result = (
-                session.execute(
-                    text(
-                        "SELECT quantity FROM products WHERE code = :code AND tenant_id = :tid FOR UPDATE"
-                    ),
-                    {"code": code, "tid": context.tenant_id},
-                )
-                .mappings()
-                .first()
+            # Buscar el producto para validar existencia y cantidad actual
+            res_prod = data_commands.query_data(
+                session, context, entity="products", filters={"code": code}
             )
 
-            if not result:
+            if not res_prod.success or not res_prod.data:
                 return ServiceResponse.error_res(f"Product {code} not found", "PRODUCT_NOT_FOUND")
 
-            new_qty = result["quantity"] + quantity
+            product = res_prod.data[0]
+            new_qty = product["quantity"] + quantity
             if new_qty < 0:
                 return ServiceResponse.error_res("Insufficient stock", "STOCK_INSUFFICIENT")
 
-            # Update quantity
-            session.execute(
-                text("UPDATE products SET quantity = :qty WHERE code = :code AND tenant_id = :tid"),
-                {"qty": new_qty, "code": code, "tid": context.tenant_id},
+            # Update quantity atómicamente
+            inc_res = data_commands.increment_data(
+                session, 
+                context, 
+                entity="products", 
+                record_id=product["id"], 
+                field="quantity", 
+                value=quantity
             )
+            if not inc_res.success:
+                return inc_res
 
             # Record movement
-            session.execute(
-                text(
-                    "INSERT INTO stock_movements (product_code, quantity, reason, user_id, tenant_id) VALUES (:code, :qty, :reason, :uid, :tid)"
-                ),
-                {
-                    "code": code,
-                    "qty": quantity,
+            data_commands.insert_data(
+                session, 
+                context, 
+                entity="stock_movements", 
+                data={
+                    "product_code": code,
+                    "quantity": quantity,
                     "reason": reason,
-                    "uid": context.user_id,
-                    "tid": context.tenant_id,
-                },
+                    "user_id": context.user_id,
+                }
             )
 
             session.commit()
@@ -196,18 +201,14 @@ class StockCommandHandler:
     )
     def get_product(self, session: Session, context: TenantContext, code: str) -> ServiceResponse:
         try:
-            result = (
-                session.execute(
-                    text("SELECT * FROM products WHERE code = :code AND tenant_id = :tid"),
-                    {"code": code, "tid": context.tenant_id},
-                )
-                .mappings()
-                .first()
+            res = data_commands.query_data(
+                session, context, entity="products", filters={"code": code}
             )
 
-            if not result:
+            if not res.success or not res.data:
                 return ServiceResponse.error_res(f"Product {code} not found", "PRODUCT_NOT_FOUND")
-            return ServiceResponse.success_res(data=dict(result), message="Product retrieved.")
+            
+            return ServiceResponse.success_res(data=res.data[0], message="Product retrieved.")
         except Exception as e:
             return ServiceResponse.error_res(f"Error fetching product: {str(e)}", "STOCK_GET_ERROR")
 

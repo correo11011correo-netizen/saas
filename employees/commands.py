@@ -2,12 +2,12 @@ import datetime
 import logging
 import uuid
 
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from core.context import TenantContext
 from core.decorators import command
 from core.types import ServiceResponse
+from core.data_commands import data_commands
 from employees.engine import employee_engine
 
 logger = logging.getLogger("OmniCore.EmployeeCommands")
@@ -33,17 +33,17 @@ class EmployeeCommandHandler:
                     "Invalid type. Must be 'permission', 'goal_type', or 'task'.", "INVALID_TYPE"
                 )
 
-            session.execute(
-                text(
-                    """
-                    INSERT INTO business_definitions (tenant_id, def_type, def_key, def_label)
-                    VALUES (:tid, :type, :key, :label)
-                    ON CONFLICT (tenant_id, def_type, def_key) DO UPDATE SET def_label = EXCLUDED.def_label
-                    """
-                ),
-                {"tid": context.tenant_id, "type": def_type, "key": def_key, "label": def_label},
+            res = data_commands.upsert_data(
+                session, 
+                context, 
+                entity="business_definitions", 
+                conflict_keys=["tenant_id", "def_type", "def_key"], 
+                data={"def_type": def_type, "def_key": def_key, "def_label": def_label}, 
+                update_columns=["def_label"]
             )
-            session.commit()
+            if not res.success:
+                return res
+
             return ServiceResponse.success_res(
                 message=f"Term {def_label} ({def_type}) defined successfully."
             )
@@ -79,24 +79,22 @@ class EmployeeCommandHandler:
                 )
 
             employee_id = uuid.uuid4()
-            session.execute(
-                text(
-                    """
-                    INSERT INTO employees (id, tenant_id, user_id, bot_profile_id, name, role, type)
-                    VALUES (:id, :tid, :uid, :bid, :name, :role, :type)
-                    """
-                ),
-                {
-                    "id": employee_id,
-                    "tid": context.tenant_id,
-                    "uid": uuid.UUID(user_id) if user_id else None,
-                    "bid": uuid.UUID(bot_profile_id) if bot_profile_id else None,
-                    "name": name,
-                    "role": role,
-                    "type": type,
-                },
+            res = data_commands.insert_data(
+                session, 
+                context, 
+                entity="employees", 
+                data={
+                    "id": employee_id, 
+                    "user_id": uuid.UUID(user_id) if user_id else None, 
+                    "bot_profile_id": uuid.UUID(bot_profile_id) if bot_profile_id else None, 
+                    "name": name, 
+                    "role": role, 
+                    "type": type
+                }
             )
-            session.commit()
+            if not res.success:
+                return res
+
             return ServiceResponse.success_res(
                 data={"employee_id": str(employee_id)},
                 message=f"Employee {name} created successfully as {type}.",
@@ -119,36 +117,41 @@ class EmployeeCommandHandler:
         granted: bool,
     ) -> ServiceResponse:
         try:
+            # Validar que el empleado existe y obtener su tenant_id
+            emp_res = data_commands.query_data(
+                session, context, entity="employees", filters={"id": employee_id}
+            )
+            if not emp_res.success or not emp_res.data:
+                return ServiceResponse.error_res("Employee not found", "EMPLOYEE_NOT_FOUND")
+            
+            tenant_id = emp_res.data[0]["tenant_id"]
+
             # Validar que el permiso existe en las definiciones del negocio
-            tenant_id = session.execute(
-                text("SELECT tenant_id FROM employees WHERE id = :eid"),
-                {"eid": uuid.UUID(employee_id)},
-            ).scalar()
+            def_res = data_commands.query_data(
+                session, 
+                context, 
+                entity="business_definitions", 
+                filters={"def_type": "permission", "def_key": permission_key}
+            )
 
-            exists = session.execute(
-                text(
-                    "SELECT 1 FROM business_definitions WHERE tenant_id = :tid AND def_type = 'permission' AND def_key = :key"
-                ),
-                {"tid": tenant_id, "key": permission_key},
-            ).first()
-
-            if not exists:
+            if not def_res.success or not def_res.data:
                 return ServiceResponse.error_res(
                     f"Permission '{permission_key}' is not defined for this business. Use 'staff.define_business_term' first.",
                     "UNDEFINED_PERMISSION",
                 )
 
-            session.execute(
-                text(
-                    """
-                    INSERT INTO employee_permissions (employee_id, permission_key, granted)
-                    VALUES (:eid, :key, :granted)
-                    ON CONFLICT (employee_id, permission_key) DO UPDATE SET granted = EXCLUDED.granted
-                    """
-                ),
-                {"eid": uuid.UUID(employee_id), "key": permission_key, "granted": granted},
+            # Upsert del permiso
+            res = data_commands.upsert_data(
+                session, 
+                context, 
+                entity="employee_permissions", 
+                conflict_keys=["employee_id", "permission_key"], 
+                data={"employee_id": uuid.UUID(employee_id), "permission_key": permission_key, "granted": granted}, 
+                update_columns=["granted"]
             )
-            session.commit()
+            if not res.success:
+                return res
+
             return ServiceResponse.success_res(
                 message=f"Permission {permission_key} updated for employee."
             )
@@ -178,42 +181,45 @@ class EmployeeCommandHandler:
         end_date: str,
     ) -> ServiceResponse:
         try:
+            # Validar que el empleado existe y obtener su tenant_id
+            emp_res = data_commands.query_data(
+                session, context, entity="employees", filters={"id": employee_id}
+            )
+            if not emp_res.success or not emp_res.data:
+                return ServiceResponse.error_res("Employee not found", "EMPLOYEE_NOT_FOUND")
+            
+            tenant_id = emp_res.data[0]["tenant_id"]
+
             # Validar que el tipo de meta existe en las definiciones del negocio
-            tenant_id = session.execute(
-                text("SELECT tenant_id FROM employees WHERE id = :eid"),
-                {"eid": uuid.UUID(employee_id)},
-            ).scalar()
+            def_res = data_commands.query_data(
+                session, 
+                context, 
+                entity="business_definitions", 
+                filters={"def_type": "goal_type", "def_key": goal_type}
+            )
 
-            exists = session.execute(
-                text(
-                    "SELECT 1 FROM business_definitions WHERE tenant_id = :tid AND def_type = 'goal_type' AND def_key = :key"
-                ),
-                {"tid": tenant_id, "key": goal_type},
-            ).first()
-
-            if not exists:
+            if not def_res.success or not def_res.data:
                 return ServiceResponse.error_res(
                     f"Goal type '{goal_type}' is not defined for this business. Use 'staff.define_business_term' first.",
                     "UNDEFINED_GOAL",
                 )
 
-            session.execute(
-                text(
-                    """
-                    INSERT INTO employee_goals (employee_id, goal_type, target_value, start_date, end_date, tenant_id)
-                    VALUES (:eid, :type, :target, :start, :end, :tid)
-                    """
-                ),
-                {
-                    "eid": uuid.UUID(employee_id),
-                    "type": goal_type,
-                    "target": target,
-                    "start": datetime.date.fromisoformat(start_date),
-                    "end": datetime.date.fromisoformat(end_date),
-                    "tid": context.tenant_id,
-                },
+            # Insertar la meta
+            res = data_commands.insert_data(
+                session, 
+                context, 
+                entity="employee_goals", 
+                data={
+                    "employee_id": uuid.UUID(employee_id), 
+                    "goal_type": goal_type, 
+                    "target_value": target, 
+                    "start_date": datetime.date.fromisoformat(start_date), 
+                    "end_date": datetime.date.fromisoformat(end_date)
+                }
             )
-            session.commit()
+            if not res.success:
+                return res
+
             return ServiceResponse.success_res(message="Performance goal set successfully.")
         except Exception as e:
             session.rollback()

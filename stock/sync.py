@@ -1,11 +1,11 @@
 import logging
 
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from core.context import TenantContext
 from core.decorators import command
 from core.types import ServiceResponse
+from core.data_commands import data_commands
 
 logger = logging.getLogger("OmniCore.StockSync")
 
@@ -27,27 +27,38 @@ class StockSyncCommandHandler:
         try:
             if not last_sync:
                 # Sincronización Inicial: Todo el stock
-                query = "SELECT code, name, price, quantity, category, is_weight FROM products WHERE tenant_id = :tid"
-                params = {"tid": context.tenant_id}
+                res = data_commands.query_data(
+                    session, context, entity="products"
+                )
+                if not res.success:
+                    return res
+                
+                # Filtrar solo las columnas necesarias para el APK
+                data = [
+                    {
+                        "code": p.get("code"),
+                        "name": p.get("name"),
+                        "price": p.get("price"),
+                        "quantity": p.get("quantity"),
+                        "category": p.get("category"),
+                        "is_weight": p.get("is_weight"),
+                    }
+                    for p in res.data
+                ]
+                return ServiceResponse.success_res(
+                    data=data, message=f"Synchronized {len(data)} products."
+                )
             else:
                 # Sincronización Incremental: Solo cambios recientes
-                # Nota: Para que esto sea perfecto, necesitaríamos una columna 'updated_at' en la tabla 'products'.
-                # Por ahora, simularemos la búsqueda por movimientos de stock recientes.
-                query = """
-                    SELECT p.code, p.name, p.price, p.quantity, p.category, p.is_weight
-                    FROM products p
-                    JOIN stock_movements sm ON p.code = sm.product_code AND p.tenant_id = sm.tenant_id
-                    WHERE p.tenant_id = :tid AND sm.created_at > :last_sync
-                """
-                # Como no tenemos created_at en stock_movements explícitamente en el esquema actual (solo en la tabla general),
-                # en una implementación real añadiríamos esa columna.
-                params = {"tid": context.tenant_id, "last_sync": last_sync}
+                res = data_commands.get_modified_products(
+                    session, context, last_sync=last_sync
+                )
+                if not res.success:
+                    return res
 
-            result = session.execute(text(query), params).mappings().all()
-
-            return ServiceResponse.success_res(
-                data=[dict(row) for row in result], message=f"Synchronized {len(result)} products."
-            )
+                return ServiceResponse.success_res(
+                    data=res.data, message=f"Synchronized {len(res.data)} products."
+                )
         except Exception as e:
             return ServiceResponse.error_res(str(e), "STOCK_SYNC_ERROR")
 

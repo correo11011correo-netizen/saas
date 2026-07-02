@@ -56,26 +56,35 @@ class CommandDispatcher:
                     "code": "PLAN_REQUIRED",
                 }
 
-        with self.db_session_factory() as session:
-            try:
-                # Inject context and session as first arguments
-                # The commands are expected to be: func(session, context, **params)
-                result = func(session, context, **params)
-
-                # Commit the business transaction before auditing
-                session.commit()
-
-                # Automatic Audit Log (Independent transaction)
+        try:
+            with self.db_session_factory() as session:
                 try:
-                    self._audit(context, command_name, params)
-                except Exception as audit_err:
-                    logger.error(f"Audit failed for {command_name}: {audit_err}", extra=extra)
+                    # Inject context and session as first arguments
+                    # The commands are expected to be: func(session, context, **params)
+                    result = func(session, context, **params)
 
-                return result
-            except Exception as e:
-                session.rollback()
-                logger.exception(f"Error executing {command_name}: {e}", extra=extra)
-                return {"success": False, "error": str(e), "code": "EXECUTION_ERROR"}
+                    # Commit the business transaction before auditing
+                    session.commit()
+
+                    # Automatic Audit Log (Independent transaction)
+                    try:
+                        self._audit(context, command_name, params)
+                    except Exception as audit_err:
+                        logger.error(f"Audit failed for {command_name}: {audit_err}", extra=extra)
+
+                    return result
+                except Exception as e:
+                    session.rollback()
+                    logger.exception(f"Error executing {command_name}: {e}", extra=extra)
+                    return {"success": False, "error": str(e), "code": "EXECUTION_ERROR"}
+        except ConnectionError as ce:
+            logger.error(f"Database connection error during {command_name}: {ce}", extra=extra)
+            return {
+                "success": False,
+                "error": str(ce),
+                "code": "DATABASE_DISCONNECTED",
+                "action": "Check Sentry Panel for connection status."
+            }
 
     def _audit(self, context: TenantContext, command: str, params: dict):
         import time

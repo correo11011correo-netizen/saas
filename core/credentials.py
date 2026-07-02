@@ -1,12 +1,12 @@
 import logging
 import os
 
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from core.context import TenantContext
 from core.decorators import command
 from core.types import ServiceResponse
+from core.data_commands import data_commands
 
 logger = logging.getLogger("OmniCore.Credentials")
 BASE_URL = os.getenv("BASE_URL")
@@ -27,18 +27,14 @@ class CredentialsCommandHandler:
     )
     def list_credentials(self, session: Session, context: TenantContext) -> ServiceResponse:
         try:
-            result = (
-                session.execute(
-                    text(
-                        "SELECT service_name, account_alias, api_key, secret, metadata FROM credentials WHERE tenant_id = :tid"
-                    ),
-                    {"tid": context.tenant_id},
-                )
-                .mappings()
-                .all()
+            res = data_commands.query_data(
+                session, context, entity="credentials"
             )
+            if not res.success:
+                return res
+            
             return ServiceResponse.success_res(
-                data=[dict(row) for row in result],
+                data=res.data,
                 message="Credentials listed successfully.",
             )
         except Exception as e:
@@ -59,12 +55,23 @@ class CredentialsCommandHandler:
         account_alias: str,
     ) -> ServiceResponse:
         try:
-            session.execute(
-                text(
-                    "DELETE FROM credentials WHERE service_name = :service AND account_alias = :alias AND tenant_id = :tid"
-                ),
-                {"service": service, "alias": account_alias, "tid": context.tenant_id},
+            # Buscar el ID de la credencial primero
+            res_id = data_commands.query_data(
+                session, 
+                context, 
+                entity="credentials", 
+                filters={"service_name": service, "account_alias": account_alias}
             )
+            if not res_id.success or not res_id.data:
+                return ServiceResponse.error_res("Credential not found", "CRED_NOT_FOUND")
+            
+            cred_id = res_id.data[0]["id"]
+            del_res = data_commands.delete_data(
+                session, context, entity="credentials", record_id=cred_id
+            )
+            if not del_res.success:
+                return del_res
+
             session.commit()
             return ServiceResponse.success_res(
                 message=f"Credential for {service} ({account_alias}) deleted successfully."
@@ -85,23 +92,26 @@ class CredentialsCommandHandler:
     ) -> ServiceResponse:
         try:
             # Get tenant secret
-            result = (
-                session.execute(
-                    text("SELECT webhook_secret FROM tenants WHERE id = :tid"),
-                    {"tid": context.tenant_id},
-                )
-                .mappings()
-                .first()
+            res_tenant = data_commands.query_data(
+                session, context, entity="tenants", filters={"id": context.tenant_id}
             )
 
-            if not result or not result["webhook_secret"]:
+            if not res_tenant.success or not res_tenant.data:
+                return ServiceResponse.error_res(
+                    "Tenant not found.", "TENANT_NOT_FOUND"
+                )
+            
+            tenant = res_tenant.data[0]
+            secret = tenant.get("webhook_secret")
+
+            if not secret:
                 return ServiceResponse.error_res(
                     "Tenant has no webhook secret configured.", "SECRET_NOT_FOUND"
                 )
 
-            webhook_url = f"{BASE_URL}/hooks/{result['webhook_secret']}/{service}"
+            webhook_url = f"{BASE_URL}/hooks/{secret}/{service}"
             return ServiceResponse.success_res(
-                data={"url": webhook_url, "verify_token": result["webhook_secret"]},
+                data={"url": webhook_url, "verify_token": secret},
                 message="Webhook details generated successfully.",
             )
         except Exception as e:
@@ -135,25 +145,34 @@ class CredentialsCommandHandler:
                 f"Intentando establecer credencial para tenant {context.tenant_id}, servicio {service}, alias {account_alias}"
             )
 
-            # Upsert credential for this tenant and account alias
-            session.execute(
-                text(
-                    """
-                    INSERT INTO credentials (service_name, account_alias, api_key, secret, metadata, tenant_id)
-                    VALUES (:service, :alias, :key, :secret, :meta, :tid)
-                    ON CONFLICT (tenant_id, service_name, account_alias) DO UPDATE
-                    SET api_key = EXCLUDED.api_key, secret = EXCLUDED.secret, metadata = EXCLUDED.metadata
-                """
-                ),
-                {
-                    "service": service,
-                    "alias": account_alias,
-                    "key": api_key,
-                    "secret": secret,
-                    "meta": metadata,
-                    "tid": context.tenant_id,
-                },
+            # Check if exists for Upsert logic
+            res_exists = data_commands.query_data(
+                session, 
+                context, 
+                entity="credentials", 
+                filters={"service_name": service, "account_alias": account_alias}
             )
+
+            cred_data = {
+                "service_name": service,
+                "account_alias": account_alias,
+                "api_key": api_key,
+                "secret": secret,
+                "metadata": metadata,
+                "tenant_id": context.tenant_id,
+            }
+
+            if res_exists.success and res_exists.data:
+                # Update existing
+                cred_id = res_exists.data[0]["id"]
+                data_commands.patch_data(
+                    session, context, entity="credentials", record_id=cred_id, updates=cred_data
+                )
+            else:
+                # Insert new
+                data_commands.insert_data(
+                    session, context, entity="credentials", data=cred_data
+                )
 
             session.commit()
             logger.info(f"Credenciales configuradas exitosamente para {service} ({account_alias}).")
@@ -183,27 +202,28 @@ class CredentialsCommandHandler:
         account_alias: str,
     ) -> ServiceResponse:
         try:
-            result = (
-                session.execute(
-                    text(
-                        "SELECT api_key, secret, metadata FROM credentials WHERE service_name = :service AND account_alias = :alias AND tenant_id = :tid"
-                    ),
-                    {
-                        "service": service,
-                        "alias": account_alias,
-                        "tid": context.tenant_id,
-                    },
-                )
-                .mappings()
-                .first()
+            res = data_commands.query_data(
+                session, 
+                context, 
+                entity="credentials", 
+                filters={"service_name": service, "account_alias": account_alias}
             )
 
-            if not result:
+            if not res.success or not res.data:
                 return ServiceResponse.error_res(
                     f"No credentials found for {service} ({account_alias})",
                     "CRED_NOT_FOUND",
                 )
-            return ServiceResponse.success_res(data=dict(result), message="Credential retrieved.")
+            
+            cred = res.data[0]
+            return ServiceResponse.success_res(
+                data={
+                    "api_key": cred.get("api_key"), 
+                    "secret": cred.get("secret"), 
+                    "metadata": cred.get("metadata")
+                }, 
+                message="Credential retrieved."
+            )
         except Exception as e:
             return ServiceResponse.error_res(
                 f"Error fetching credential: {str(e)}", "CRED_GET_ERROR"

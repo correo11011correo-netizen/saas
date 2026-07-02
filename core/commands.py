@@ -1,12 +1,13 @@
 import logging
 import os
+import hashlib
 
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from core.context import TenantContext
 from core.decorators import command
 from core.types import ServiceResponse
+from core.data_commands import data_commands
 
 logger = logging.getLogger("OmniCore.CoreCommands")
 
@@ -31,21 +32,22 @@ class CoreCommandHandler:
         role: str = "employee",
     ) -> ServiceResponse:
         try:
-            import hashlib
-
             password_hash = hashlib.sha256(password.encode()).hexdigest()
 
-            session.execute(
-                text(
-                    "INSERT INTO users (email, password_hash, role, tenant_id) VALUES (:email, :pass, :role, :tid)"
-                ),
-                {
-                    "email": username,
-                    "pass": password_hash,
-                    "role": role,
-                    "tid": context.tenant_id,
-                },
+            res = data_commands.insert_data(
+                session, 
+                context, 
+                entity="users", 
+                data={
+                    "email": username, 
+                    "password_hash": password_hash, 
+                    "role": role, 
+                    "tenant_id": context.tenant_id
+                }
             )
+            if not res.success:
+                return res
+
             session.commit()
             return ServiceResponse.success_res(message=f"Employee {username} created successfully.")
         except Exception as e:
@@ -73,19 +75,36 @@ class CoreCommandHandler:
     ) -> ServiceResponse:
         try:
             if granted:
-                session.execute(
-                    text(
-                        "INSERT INTO user_permissions (user_id, permission_key, tenant_id) VALUES (:uid, :pk, :tid) ON CONFLICT DO NOTHING"
-                    ),
-                    {"uid": user_id, "pk": permission_key, "tid": context.tenant_id},
+                res = data_commands.insert_data(
+                    session, 
+                    context, 
+                    entity="user_permissions", 
+                    data={
+                        "user_id": user_id, 
+                        "permission_key": permission_key, 
+                        "tenant_id": context.tenant_id
+                    }
                 )
+                if not res.success:
+                    # If it fails because of conflict, we just ignore it (equivalent to ON CONFLICT DO NOTHING)
+                    if "conflict" in str(res.error).lower() or "duplicate" in str(res.error).lower():
+                        pass
+                    else:
+                        return res
             else:
-                session.execute(
-                    text(
-                        "DELETE FROM user_permissions WHERE user_id = :uid AND permission_key = :pk AND tenant_id = :tid"
-                    ),
-                    {"uid": user_id, "pk": permission_key, "tid": context.tenant_id},
+                # Delete requires ID
+                res_id = data_commands.query_data(
+                    session, 
+                    context, 
+                    entity="user_permissions", 
+                    filters={"user_id": user_id, "permission_key": permission_key}
                 )
+                if res_id.success and res_id.data:
+                    perm_id = res_id.data[0]["id"]
+                    data_commands.delete_data(
+                        session, context, entity="user_permissions", record_id=perm_id
+                    )
+
             session.commit()
             return ServiceResponse.success_res(message="Permission updated successfully.")
         except Exception as e:
@@ -101,16 +120,19 @@ class CoreCommandHandler:
     )
     def list_users(self, session: Session, context: TenantContext) -> ServiceResponse:
         try:
-            result = (
-                session.execute(
-                    text("SELECT id, email, role FROM users WHERE tenant_id = :tid"),
-                    {"tid": context.tenant_id},
-                )
-                .mappings()
-                .all()
+            res = data_commands.query_data(
+                session, context, entity="users"
             )
+            if not res.success:
+                return res
+
+            # Filter fields as original code did (id, email, role)
+            filtered_data = [
+                {"id": u["id"], "email": u["email"], "role": u["role"]} 
+                for u in res.data
+            ]
             return ServiceResponse.success_res(
-                data=[dict(u) for u in result], message="Users listed."
+                data=filtered_data, message="Users listed."
             )
         except Exception as e:
             return ServiceResponse.error_res(f"Error listing users: {str(e)}", "AUTH_LIST_ERROR")
@@ -123,27 +145,19 @@ class CoreCommandHandler:
     def get_profile(self, session: Session, context: TenantContext) -> ServiceResponse:
         try:
             # Obtener datos del tenant
-            tenant = (
-                session.execute(
-                    text("SELECT name, plan FROM tenants WHERE id = :tid"),
-                    {"tid": context.tenant_id},
-                )
-                .mappings()
-                .first()
+            res_tenant = data_commands.query_data(
+                session, context, entity="tenants", filters={"id": context.tenant_id}
             )
-
             # Obtener datos del usuario
-            user = (
-                session.execute(
-                    text("SELECT email, role FROM users WHERE id = :uid"),
-                    {"uid": context.user_id},
-                )
-                .mappings()
-                .first()
+            res_user = data_commands.query_data(
+                session, context, entity="users", filters={"id": context.user_id}
             )
 
-            if not tenant or not user:
+            if not res_tenant.success or not res_tenant.data or not res_user.success or not res_user.data:
                 return ServiceResponse.error_res("Profile not found", "PROFILE_NOT_FOUND")
+
+            tenant = res_tenant.data[0]
+            user = res_user.data[0]
 
             return ServiceResponse.success_res(
                 data={
@@ -176,7 +190,13 @@ class CoreCommandHandler:
     )
     def get_health(self, session: Session, context: TenantContext) -> ServiceResponse:
         try:
-            session.execute(text("SELECT 1"))
+            # Use a simple query on any table to check connectivity instead of 'SELECT 1'
+            res = data_commands.query_data(
+                session, TenantContext(tenant_id=None), entity="tenants", limit=1
+            )
+            if not res.success:
+                raise Exception(res.error)
+            
             return ServiceResponse.success_res(
                 data={"db": "OK", "api": "OK"}, message="Infrastructure is healthy."
             )

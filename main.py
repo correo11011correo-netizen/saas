@@ -30,13 +30,8 @@ from whatsapp.commands import bot_manager_commands, whatsapp_commands
 # Configure global logging
 logger = setup_logging()
 
-# Database Configuration
-DB_URL = os.getenv("DATABASE_URL")
-if not DB_URL:
-    raise Exception("DATABASE_URL variable not set")
-engine = create_engine(DB_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
+# Database Configuration - Resilient Manager
+from core.db import db_manager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -52,6 +47,7 @@ async def lifespan(app: FastAPI):
 
     # 2. Register all command handlers
     dispatcher.register_handler(core_commands)
+    dispatcher.register_handler(data_commands)
     dispatcher.register_handler(credentials_commands)
     dispatcher.register_handler(sales_commands)
     dispatcher.register_handler(stock_commands)
@@ -62,10 +58,12 @@ async def lifespan(app: FastAPI):
     dispatcher.register_handler(saas_admin_commands)
     dispatcher.register_handler(billing_commands)
     dispatcher.register_handler(crm_commands)
+    dispatcher.register_handler(admin_commands) # Register Sentry Admin Commands
 
     # Inject DB factory into Webhooks AND Dispatcher
-    set_db_session_factory(SessionLocal)
-    dispatcher.set_db_session_factory(SessionLocal)
+    from core.db import db_manager
+    set_db_session_factory(db_manager.get_session)
+    dispatcher.set_db_session_factory(db_manager.get_session)
     yield
     # Clean up (if needed)
 
@@ -85,11 +83,17 @@ app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
 # Dependency to get DB session
 def get_db():
-    db = SessionLocal()
+    """Dependency to get DB session using the resilient manager."""
     try:
-        yield db
-    finally:
-        db.close()
+        db = db_manager.get_session()
+        try:
+            yield db
+        finally:
+            db.close()
+    except ConnectionError as e:
+        # Handle cases where DB is not connected but endpoint is called
+        logger.error(f"get_db dependency failed: {e}")
+        yield None
 
 
 @app.get("/api/health")
@@ -97,6 +101,10 @@ def health_check(db=Depends(get_db)):
     """
     Endpoint para verificación de salud. Usado por Railway para despliegues Zero-Downtime.
     """
+    if not db_manager.is_connected:
+        logger.error("Health check failed: Database offline")
+        raise HTTPException(status_code=503, detail="Database Down")
+    
     try:
         db.execute(text("SELECT 1"))
     except Exception as e:

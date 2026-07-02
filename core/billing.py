@@ -2,12 +2,12 @@ import datetime
 import logging
 import uuid
 
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from core.context import TenantContext
 from core.decorators import command
 from core.types import ServiceResponse
+from core.data_commands import data_commands
 
 logger = logging.getLogger("OmniCore.Billing")
 
@@ -27,30 +27,39 @@ class BillingCommandHandler:
         self, session: Session, context: TenantContext, tenant_id: str, plan_id: str
     ) -> ServiceResponse:
         try:
+            tid = uuid.UUID(tenant_id)
             # 1. Update the tenant table for quick access
-            session.execute(
-                text("UPDATE tenants SET plan = :plan WHERE id = :tid"),
-                {"plan": plan_id, "tid": uuid.UUID(tenant_id)},
+            patch_res = data_commands.patch_data(
+                session, context, entity="tenants", record_id=tid, updates={"plan": plan_id}
             )
+            if not patch_res.success:
+                return patch_res
 
             # 2. Update or create the subscription record
-            session.execute(
-                text(
-                    """
-                    INSERT INTO tenant_subscriptions (tenant_id, plan_id, subscription_status, end_date)
-                    VALUES (:tid, :plan, 'active', :end_date)
-                    ON CONFLICT (tenant_id) DO UPDATE SET
-                        plan_id = EXCLUDED.plan_id,
-                        subscription_status = 'active',
-                        end_date = EXCLUDED.end_date
-                    """
-                ),
-                {
-                    "tid": uuid.UUID(tenant_id),
-                    "plan": plan_id,
-                    "end_date": datetime.datetime.now() + datetime.timedelta(days=30),
-                },
+            # Check if subscription exists
+            sub_res = data_commands.query_data(
+                session, context, entity="tenant_subscriptions", filters={"tenant_id": tid}
             )
+            
+            end_date = datetime.datetime.now() + datetime.timedelta(days=30)
+            sub_data = {
+                "tenant_id": tid,
+                "plan_id": plan_id,
+                "subscription_status": "active",
+                "end_date": end_date,
+            }
+
+            if sub_res.success and sub_res.data:
+                # Update existing
+                sub_id = sub_res.data[0]["id"]
+                data_commands.patch_data(
+                    session, context, entity="tenant_subscriptions", record_id=sub_id, updates=sub_data
+                )
+            else:
+                # Insert new
+                data_commands.insert_data(
+                    session, context, entity="tenant_subscriptions", data=sub_data
+                )
 
             session.commit()
             return ServiceResponse.success_res(
@@ -69,12 +78,21 @@ class BillingCommandHandler:
         self, session: Session, context: TenantContext, tenant_id: str, status: str
     ) -> ServiceResponse:
         try:
-            session.execute(
-                text(
-                    "UPDATE tenant_subscriptions SET subscription_status = :status WHERE tenant_id = :tid"
-                ),
-                {"status": status, "tid": uuid.UUID(tenant_id)},
+            tid = uuid.UUID(tenant_id)
+            # Buscar la suscripción primero
+            sub_res = data_commands.query_data(
+                session, context, entity="tenant_subscriptions", filters={"tenant_id": tid}
             )
+            if not sub_res.success or not sub_res.data:
+                return ServiceResponse.error_res("Subscription not found", "SUB_NOT_FOUND")
+            
+            sub_id = sub_res.data[0]["id"]
+            patch_res = data_commands.patch_data(
+                session, context, entity="tenant_subscriptions", record_id=sub_id, updates={"subscription_status": status}
+            )
+            if not patch_res.success:
+                return patch_res
+
             session.commit()
             return ServiceResponse.success_res(message=f"Subscription status updated to {status}.")
         except Exception as e:
@@ -90,12 +108,30 @@ class BillingCommandHandler:
         self, session: Session, context: TenantContext, tenant_id: str, days: int
     ) -> ServiceResponse:
         try:
-            session.execute(
-                text(
-                    "UPDATE tenant_subscriptions SET end_date = end_date + INTERVAL ':days days' WHERE tenant_id = :tid"
-                ),
-                {"days": days, "tid": uuid.UUID(tenant_id)},
+            tid = uuid.UUID(tenant_id)
+            # Buscar suscripción actual
+            sub_res = data_commands.query_data(
+                session, context, entity="tenant_subscriptions", filters={"tenant_id": tid}
             )
+            if not sub_res.success or not sub_res.data:
+                return ServiceResponse.error_res("Subscription not found", "SUB_NOT_FOUND")
+            
+            sub = sub_res.data[0]
+            # Calcular nueva fecha en Python (ya que el motor no soporta INTERVAL de SQL)
+            current_end_date = sub["end_date"]
+            # Si es string, convertir a datetime
+            if isinstance(current_end_date, str):
+                from dateutil import parser
+                current_end_date = parser.parse(current_end_date)
+            
+            new_end_date = current_end_date + datetime.timedelta(days=days)
+            
+            patch_res = data_commands.patch_data(
+                session, context, entity="tenant_subscriptions", record_id=sub["id"], updates={"end_date": new_end_date}
+            )
+            if not patch_res.success:
+                return patch_res
+
             session.commit()
             return ServiceResponse.success_res(message=f"Subscription extended by {days} days.")
         except Exception as e:

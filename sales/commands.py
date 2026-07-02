@@ -2,12 +2,12 @@ import os
 import uuid
 
 import mercadopago
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from core.context import TenantContext
 from core.decorators import command
 from core.types import ServiceResponse
+from core.data_commands import data_commands
 
 BASE_URL = os.getenv("BASE_URL")
 if not BASE_URL:
@@ -37,21 +37,16 @@ class SalesCommandHandler:
             total = 0.0
             processed_items = []
             for item in items:
-                product = (
-                    session.execute(
-                        text(
-                            "SELECT price, quantity FROM products WHERE code = :code AND tenant_id = :tid"
-                        ),
-                        {"code": item["code"], "tid": context.tenant_id},
-                    )
-                    .mappings()
-                    .first()
+                # Usar motor para buscar el producto
+                res = data_commands.query_data(
+                    session, context, entity="products", filters={"code": item["code"]}
                 )
-
-                if not product:
+                if not res.success or not res.data:
                     return ServiceResponse.error_res(
                         f"Product {item['code']} not found", "PRODUCT_NOT_FOUND"
                     )
+                
+                product = res.data[0]
                 if product["quantity"] < item["quantity"]:
                     return ServiceResponse.error_res(
                         f"Insufficient stock for {item['code']}", "INSUFFICIENT_STOCK"
@@ -61,6 +56,7 @@ class SalesCommandHandler:
                 total += subtotal
                 processed_items.append(
                     {
+                        "id": product["id"],
                         "code": item["code"],
                         "quantity": item["quantity"],
                         "price": product["price"],
@@ -87,46 +83,49 @@ class SalesCommandHandler:
                 )
 
             sale_id = uuid.uuid4()
-            session.execute(
-                text(
-                    "INSERT INTO sales (id, tenant_id, cliente, customer_id, total, metodo_pago, paga_con, vuelto) "
-                    "VALUES (:id, :tid, :cliente, :cid, :total, 'efectivo', :paga, :vuelto)"
-                ),
-                {
-                    "id": sale_id,
-                    "tid": context.tenant_id,
-                    "cliente": customer_phone,
-                    "cid": customer_id,
-                    "total": total,
-                    "paga": paga_con,
-                    "vuelto": vuelto,
-                },
+            sale_res = data_commands.insert_data(
+                session, 
+                context, 
+                entity="sales", 
+                data={
+                    "id": sale_id, 
+                    "cliente": customer_phone, 
+                    "customer_id": customer_id, 
+                    "total": total, 
+                    "metodo_pago": "efectivo", 
+                    "paga_con": paga_con, 
+                    "vuelto": vuelto
+                }
             )
+            if not sale_res.success:
+                return sale_res
 
             # 4. Registrar items y descontar stock
             for pi in processed_items:
-                session.execute(
-                    text(
-                        "INSERT INTO sale_items (id, tenant_id, sale_id, product_code, quantity, price, subtotal) VALUES (:id, :tid, :sid, :code, :qty, :price, :sub)"
-                    ),
-                    {
-                        "id": uuid.uuid4(),
-                        "tid": context.tenant_id,
-                        "sid": sale_id,
-                        "code": pi["code"],
-                        "qty": pi["quantity"],
-                        "price": pi["price"],
-                        "sub": pi["subtotal"],
-                    },
+                # Registrar item de venta
+                data_commands.insert_data(
+                    session, 
+                    context, 
+                    entity="sale_items", 
+                    data={
+                        "id": uuid.uuid4(), 
+                        "sale_id": sale_id, 
+                        "product_code": pi["code"], 
+                        "quantity": pi["quantity"], 
+                        "price": pi["price"], 
+                        "subtotal": pi["subtotal"]
+                    }
                 )
-                session.execute(
-                    text(
-                        "UPDATE products SET quantity = quantity - :qty WHERE code = :code AND tenant_id = :tid"
-                    ),
-                    {"qty": pi["quantity"], "code": pi["code"], "tid": context.tenant_id},
+                # Descontar stock atómicamente
+                data_commands.increment_data(
+                    session, 
+                    context, 
+                    entity="products", 
+                    record_id=pi["id"], 
+                    field="quantity", 
+                    value=-pi["quantity"]
                 )
 
-            session.commit()
             return ServiceResponse.success_res(
                 data={"sale_id": str(sale_id), "total": total, "vuelto": vuelto},
                 message="Sale processed successfully.",
@@ -155,67 +154,58 @@ class SalesCommandHandler:
         client_request_id: str = None,
     ) -> ServiceResponse:
         try:
-            # 0. Idempotency Check: If a request ID is provided, check if sale already exists
+            # 0. Idempotency Check
             if client_request_id:
-                existing_sale = (
-                    session.execute(
-                        text(
-                            "SELECT id FROM sales_orders WHERE client_request_id = :rid AND tenant_id = :tid"
-                        ),
-                        {"rid": client_request_id, "tid": context.tenant_id},
-                    )
-                    .mappings()
-                    .first()
+                res = data_commands.query_data(
+                    session, context, entity="sales_orders", filters={"client_request_id": client_request_id}
                 )
-
-                if existing_sale:
-                    # Sale already exists, return its ID (Avoid duplication during offline sync)
+                if res.success and res.data:
                     return ServiceResponse.success_res(
-                        data={"sale_id": str(existing_sale["id"])},
+                        data={"sale_id": str(res.data[0]["id"])},
                         message="Sale already registered (idempotency check).",
                     )
 
             # 1. Get credentials for MP
-            cred = (
-                session.execute(
-                    text(
-                        "SELECT api_key FROM credentials WHERE service_name = 'mercadopago' AND account_alias = :alias AND tenant_id = :tid"
-                    ),
-                    {"alias": account_alias, "tid": context.tenant_id},
-                )
-                .mappings()
-                .first()
+            res_cred = data_commands.query_data(
+                session, 
+                context, 
+                entity="credentials", 
+                filters={"service_name": "mercadopago", "account_alias": account_alias}
             )
-
-            if not cred:
+            if not res_cred.success or not res_cred.data:
                 return ServiceResponse.error_res("MP credentials not found", "MP_CREDS_ERROR")
+            
+            cred = res_cred.data[0]
 
             # 2. Create Sale in DB
-            sale_id = session.execute(
-                text(
-                    "INSERT INTO sales_orders (tenant_id, total, payment_status, client_request_id) VALUES (:tid, :total, 'pending', :rid) RETURNING id"
-                ),
-                {"tid": context.tenant_id, "total": total, "rid": client_request_id},
-            ).scalar()
+            sale_res = data_commands.insert_data(
+                session, 
+                context, 
+                entity="sales_orders", 
+                data={
+                    "total": total, 
+                    "payment_status": "pending", 
+                    "client_request_id": client_request_id
+                }
+            )
+            if not sale_res.success:
+                return sale_res
+            sale_id = sale_res.data["id"]
 
-            # 3. SAVE ITEMS (Cierre del ciclo de stock)
-
+            # 3. SAVE ITEMS
             for item in items:
-                # Esperamos item con: code, quantity, price
                 subtotal = float(item["price"]) * int(item["quantity"])
-                session.execute(
-                    text(
-                        "INSERT INTO sale_items (tenant_id, sale_id, product_code, quantity, price, subtotal) "
-                        "VALUES (:tid, :sid, :code, :qty, :price, :sub)"
-                    ),
-                    {
-                        "tid": context.tenant_id,
-                        "sid": sale_id,
-                        "code": item["code"],
-                        "qty": item["quantity"],
-                        "price": item["price"],
-                        "sub": subtotal,
-                    },
+                data_commands.insert_data(
+                    session, 
+                    context, 
+                    entity="sale_items", 
+                    data={
+                        "sale_id": sale_id, 
+                        "product_code": item["code"], 
+                        "quantity": item["quantity"], 
+                        "price": item["price"], 
+                        "subtotal": subtotal
+                    }
                 )
 
             # 4. Create MP Preference
@@ -231,11 +221,13 @@ class SalesCommandHandler:
             payment_link = preference_response["response"]["init_point"]
 
             # 5. Update order with payment link
-            session.execute(
-                text("UPDATE sales_orders SET payment_link = :link WHERE id = :id"),
-                {"link": payment_link, "id": sale_id},
+            data_commands.patch_data(
+                session, 
+                context, 
+                entity="sales_orders", 
+                record_id=sale_id, 
+                updates={"payment_link": payment_link}
             )
-            session.commit()
 
             return ServiceResponse.success_res(
                 data={"payment_link": payment_link, "sale_id": str(sale_id)},
@@ -258,62 +250,66 @@ class SalesCommandHandler:
     ) -> ServiceResponse:
         try:
             # 1. Update Order Status
-            result = (
-                session.execute(
-                    text(
-                        "UPDATE sales_orders SET payment_status = 'paid' WHERE id = :id AND tenant_id = :tid RETURNING total"
-                    ),
-                    {"id": sale_id, "tid": context.tenant_id},
-                )
-                .mappings()
-                .first()
+            patch_res = data_commands.patch_data(
+                session, 
+                context, 
+                entity="sales_orders", 
+                record_id=sale_id, 
+                updates={"payment_status": "paid"}
             )
+            if not patch_res.success:
+                return patch_res
 
-            if not result:
-                return ServiceResponse.error_res(
-                    "Order not found or already processed", "ORDER_NOT_FOUND"
-                )
+            # Obtener total para validar (opcional, pero el código original lo hacía)
+            order_res = data_commands.query_data(
+                session, context, entity="sales_orders", filters={"id": sale_id}
+            )
+            if not order_res.success or not order_res.data:
+                return ServiceResponse.error_res("Order not found", "ORDER_NOT_FOUND")
 
             # 2. Deduct Stock for each item in the sale
-            items = (
-                session.execute(
-                    text(
-                        "SELECT product_code, quantity FROM sale_items WHERE sale_id = :sid AND tenant_id = :tid"
-                    ),
-                    {"sid": sale_id, "tid": context.tenant_id},
-                )
-                .mappings()
-                .all()
+            items_res = data_commands.query_data(
+                session, 
+                context, 
+                entity="sale_items", 
+                filters={"sale_id": sale_id}
             )
+            if not items_res.success:
+                return items_res
 
-            for item in items:
-                # Restar cantidad (quantity negativa)
-                session.execute(
-                    text(
-                        "UPDATE products SET quantity = quantity - :qty WHERE code = :code AND tenant_id = :tid"
-                    ),
-                    {
-                        "qty": item["quantity"],
-                        "code": item["product_code"],
-                        "tid": context.tenant_id,
-                    },
+            for item in items_res.data:
+                # Buscar el ID del producto para poder usar increment_data
+                prod_res = data_commands.query_data(
+                    session, 
+                    context, 
+                    entity="products", 
+                    filters={"code": item["product_code"]}
                 )
+                if prod_res.success and prod_res.data:
+                    prod_id = prod_res.data[0]["id"]
+                    # Restar cantidad
+                    data_commands.increment_data(
+                        session, 
+                        context, 
+                        entity="products", 
+                        record_id=prod_id, 
+                        field="quantity", 
+                        value=-item["quantity"]
+                    )
 
                 # Registrar movimiento de stock
-                session.execute(
-                    text(
-                        "INSERT INTO stock_movements (product_code, quantity, reason, user_id, tenant_id) "
-                        "VALUES (:code, :qty, 'SALE_CONFIRMED', :uid, :tid)"
-                    ),
-                    {
-                        "code": item["product_code"],
-                        "qty": -item["quantity"],
-                        "uid": context.user_id,
-                        "tid": context.tenant_id,
-                    },
+                data_commands.insert_data(
+                    session, 
+                    context, 
+                    entity="stock_movements", 
+                    data={
+                        "product_code": item["product_code"], 
+                        "quantity": -item["quantity"], 
+                        "reason": "SALE_CONFIRMED", 
+                        "user_id": context.user_id
+                    }
                 )
 
-            session.commit()
             return ServiceResponse.success_res(message="Payment confirmed and stock updated.")
         except Exception as e:
             session.rollback()

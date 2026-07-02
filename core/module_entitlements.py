@@ -1,9 +1,9 @@
 import logging
 
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from core.context import TenantContext
+from core.data_commands import data_commands
 
 logger = logging.getLogger("OmniCore.ModuleEntitlements")
 
@@ -23,38 +23,27 @@ class ModuleEntitlementService:
         # 1. Módulos otorgados por el plan actual del usuario
         user_plan_level = self.PLAN_HIERARCHY.get(context.plan.lower(), 0)
 
-        plan_modules = (
-            session.execute(
-                text("""
-                SELECT module_id FROM available_modules
-                WHERE (
-                    CASE
-                        WHEN base_plan = 'free' THEN 0
-                        WHEN base_plan = 'pro' THEN 1
-                        WHEN base_plan = 'enterprise' THEN 2
-                        ELSE 0
-                    END
-                ) <= :plan_level
-            """),
-                {"plan_level": user_plan_level},
-            )
-            .mappings()
-            .all()
+        # Fetch all available modules and filter by plan level in Python
+        res_modules = data_commands.query_data(
+            session, TenantContext(tenant_id=None), entity="available_modules"
         )
-
-        active_modules = {row["module_id"] for row in plan_modules}
+        
+        active_modules = set()
+        if res_modules.success:
+            for mod in res_modules.data:
+                base_plan = mod.get("base_plan", "free").lower()
+                plan_level = self.PLAN_HIERARCHY.get(base_plan, 0)
+                if plan_level <= user_plan_level:
+                    active_modules.add(mod["module_id"])
 
         # 2. Módulos asignados explícitamente al Tenant (Overrides/Customs)
-        manual_modules = (
-            session.execute(
-                text("SELECT module_id FROM tenant_modules WHERE tenant_id = :tid"),
-                {"tid": context.tenant_id},
-            )
-            .mappings()
-            .all()
+        res_manual = data_commands.query_data(
+            session, context, entity="tenant_modules"
         )
-
-        active_modules.update({row["module_id"] for row in manual_modules})
+        
+        if res_manual.success:
+            for row in res_manual.data:
+                active_modules.add(row["module_id"])
 
         return active_modules
 
